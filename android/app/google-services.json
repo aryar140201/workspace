@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "470110742427",
+    "firebase_url": "https://workspace-fd140-default-rtdb.firebaseio.com",
+    "project_id": "workspace-fd140",
+    "storage_bucket": "workspace-fd140.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:470110742427:android:85ec50541ffddf6757233e",
+        "android_client_info": {
+          "package_name": "com.example.freelenia"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "470110742427-du8uuvhslggrrshtrhhm7k7s9lhhbbjh.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDTTkXYUgJPrtKI8dZLjbIaoKc4E-27hgg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "470110742427-du8uuvhslggrrshtrhhm7k7s9lhhbbjh.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
