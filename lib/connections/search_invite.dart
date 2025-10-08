@@ -291,7 +291,7 @@ class _SearchAndInviteState extends State<SearchAndInvite> {
                 // color: surfaceColor,
                 // color: Colors.white.withOpacity(0.15),
                 gradient: LinearGradient(
-                  colors: [Color(0xFF1976D2), Color(0xFF64B5F6)],
+                  colors: [Color(0xFF19B2A9), Color(0xFFF09A4D)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),

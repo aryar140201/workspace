@@ -24,6 +24,12 @@ class _SeeAllConnectionsState extends State<SeeAllConnections> {
   String _searchQuery = "";
   bool _sortNewestFirst = true;
 
+  // Custom colors from the generated image for a modern gradient look
+  static const Color _gradientStartColor = Color(0xFF19B2A9); // Teal-Cyan
+  static const Color _gradientEndColor = Color(0xFFF09A4D);   // Orange-Peach
+  static const Color _iconColor = Color(0xFFFFFFFF);
+  static const Color _primaryTextColor = Color(0xFF2C3E50); // Dark text for contrast
+
   Future<Map<String, dynamic>?> _getUserData(String uid) async {
     var doc =
     await FirebaseFirestore.instance.collection("users").doc(uid).get();
@@ -44,20 +50,31 @@ class _SeeAllConnectionsState extends State<SeeAllConnections> {
 
   @override
   Widget build(BuildContext context) {
+    // Scaffold background color matching the light area of the gradient bleed
     return Scaffold(
-      backgroundColor: Colors.blue.shade50,
+      backgroundColor: const Color(0xFFE0F7FA), // Very light background
       appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(150),
+        preferredSize: const Size.fromHeight(130), // Adjusted height
         child: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
-              colors: [Color(0xFF1976D2), Color(0xFF64B5F6)],
+              // Using the custom gradient colors
+              colors: [_gradientStartColor, _gradientEndColor],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
-            borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
+            // Subtle curve at the bottom
+            borderRadius: BorderRadius.vertical(bottom: Radius.circular(25)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black26,
+                blurRadius: 8,
+                offset: Offset(0, 4),
+              ),
+            ],
           ),
           child: SafeArea(
+            bottom: false,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -71,27 +88,29 @@ class _SeeAllConnectionsState extends State<SeeAllConnections> {
                       const Text(
                         "Chat",
                         style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 22,
+                          color: _iconColor,
+                          fontSize: 24, // Slightly larger title
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                       Row(
                         children: [
-                          // 🔍 Search Button → Search Tab via AuthWrapper
+                          // 🔍 Search Button → Search Tab via AuthWrapper - Removed for new search bar design
+                          // However, I will keep the original logic to navigate to the search tab
                           IconButton(
-                            icon: const Icon(Icons.search, color: Colors.white),
+                            icon: const Icon(Icons.search, color: _iconColor),
                             onPressed: () {
                               Navigator.pushReplacement(
                                 context,
                                 MaterialPageRoute(
                                   builder: (_) =>
-                                  const AuthWrapper(initialIndex: 1),
+                                  const AuthWrapper(initialIndex: 1), // Navigate to Search tab (index 1)
                                 ),
                               );
                             },
                           ),
 
+                          // 🔔 Notifications
                           StreamBuilder<QuerySnapshot>(
                             stream: FirebaseFirestore.instance
                                 .collection("notifications")
@@ -104,13 +123,13 @@ class _SeeAllConnectionsState extends State<SeeAllConnections> {
 
                               return IconButton(
                                 icon: badges.Badge(
-                                  position: badges.BadgePosition.topEnd(),
+                                  position: badges.BadgePosition.topEnd(top: 0, end: 0),
                                   showBadge: unreadCount > 0,
                                   badgeContent: Text(
                                     unreadCount.toString(),
                                     style: const TextStyle(color: Colors.white, fontSize: 10),
                                   ),
-                                  child: const Icon(Icons.notifications_none, color: Colors.white),
+                                  child: const Icon(Icons.notifications_none, color: _iconColor),
                                 ),
                                 onPressed: () {
                                   Navigator.push(
@@ -129,46 +148,57 @@ class _SeeAllConnectionsState extends State<SeeAllConnections> {
                   ),
                 ),
 
-                // 🔍 Search / Filter Bar
-                Container(
-                  margin:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(30),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.search, color: Colors.white70),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: TextField(
-                          style: const TextStyle(color: Colors.white),
-                          decoration: const InputDecoration(
-                            hintText: "Search connections...",
-                            hintStyle: TextStyle(color: Colors.white70),
-                            border: InputBorder.none,
+                // 🔍 Floating Search / Filter Bar (Overlapping the gradient and body)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(30),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.search, color: Colors.grey.shade600),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            style: const TextStyle(color: Colors.black87),
+                            decoration: InputDecoration(
+                              hintText: "Search connections...",
+                              hintStyle: TextStyle(color: Colors.grey.shade500),
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                            ),
+                            onChanged: (val) {
+                              setState(() => _searchQuery = val.toLowerCase());
+                            },
                           ),
-                          onChanged: (val) {
-                            setState(() => _searchQuery = val.toLowerCase());
+                        ),
+                        // Filter Icon matching the new color scheme
+                        IconButton(
+                          icon: Icon(
+                            _sortNewestFirst
+                                ? Icons.filter_list_rounded
+                                : Icons.sort,
+                            color: _gradientEndColor, // Use the accent color for the icon
+                          ),
+                          onPressed: () {
+                            setState(() => _sortNewestFirst = !_sortNewestFirst);
                           },
                         ),
-                      ),
-                      IconButton(
-                        icon: Icon(
-                          _sortNewestFirst
-                              ? Icons.filter_alt
-                              : Icons.filter_alt_off,
-                          color: Colors.white,
-                        ),
-                        onPressed: () {
-                          setState(() => _sortNewestFirst = !_sortNewestFirst);
-                        },
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
+                const SizedBox(height: 10), // Spacing below the search bar
               ],
             ),
           ),
@@ -260,173 +290,182 @@ class _SeeAllConnectionsState extends State<SeeAllConnections> {
                         ),
                       );
                     },
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 8,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          ProfileAvatar(
-                            imageUrlOrPath: userData["profilePic"],
-                            radius: 26,
-                          ),
-                          const SizedBox(width: 12),
+                    child: StreamBuilder<DocumentSnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection("chats")
+                          .doc(chatId)
+                          .snapshots(),
+                      builder: (context, chatSnap) {
+                        // Check for unread status to apply gradient to the tile
+                        bool isUnread = false;
+                        if (chatSnap.hasData && chatSnap.data!.exists) {
+                          final data = chatSnap.data!.data() as Map<String, dynamic>?;
+                          final lastMsg = data?["lastMessage"] != null
+                              ? Map<String, dynamic>.from(data!["lastMessage"])
+                              : null;
 
-                          // Name + Last Message
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  name,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                    color: Colors.black87,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
+                          isUnread = lastMsg != null &&
+                              lastMsg["senderId"] != currentUid &&
+                              !(lastMsg["readBy"]?[currentUid] ?? false);
+                        }
+
+                        // Custom BoxDecoration for the chat tile
+                        final BoxDecoration decoration = BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: isUnread
+                              ? Border.all(color: _gradientEndColor.withOpacity(0.8), width: 2) // New message border
+                              : null,
+                          gradient: isUnread
+                              ? LinearGradient(
+                            colors: [
+                              _gradientEndColor.withOpacity(0.1), // Subtle background gradient for "New"
+                              Colors.white,
+                            ],
+                            begin: Alignment.topRight,
+                            end: Alignment.bottomLeft,
+                          )
+                              : null,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        );
+
+                        // Last Message Logic
+                        String lastMessageText = "No messages yet";
+                        DateTime? lastMessageTime;
+                        if (chatSnap.hasData && chatSnap.data!.exists) {
+                          final data = chatSnap.data!.data() as Map<String, dynamic>?;
+                          if (data != null && data["lastMessage"] != null) {
+                            final lastMsg = Map<String, dynamic>.from(data["lastMessage"]);
+                            final senderId = lastMsg["senderId"];
+                            lastMessageTime = (lastMsg["createdAt"] as Timestamp?)?.toDate();
+
+                            String msgText = "";
+                            if (lastMsg["type"] == null || lastMsg["type"] == "text") {
+                              try {
+                                final helper = EncryptionHelper(chatId);
+                                msgText = helper.decryptText(lastMsg["text"]);
+                              } catch (_) {
+                                msgText = "[Message]";
+                              }
+                            } else if (lastMsg["type"] == "image") {
+                              msgText = "📷 Photo";
+                            } else if (lastMsg["type"] == "video") {
+                              msgText = "🎥 Video";
+                            } else if (lastMsg["type"] == "file") {
+                              msgText = "📎 ${lastMsg["fileName"] ?? "File"}";
+                            } else {
+                              msgText = "[${lastMsg["type"]}]";
+                            }
+                            lastMessageText = senderId == currentUid ? "You: $msgText" : msgText;
+                          }
+                        }
+
+                        // Time and Unread Badge Logic
+                        Widget timeAndUnreadBadge;
+                        if (lastMessageTime != null) {
+                          timeAndUnreadBadge = Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                _formatTime(lastMessageTime),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: isUnread ? _gradientEndColor : Colors.grey.shade600,
+                                  fontWeight: isUnread ? FontWeight.bold : FontWeight.normal,
                                 ),
-                                const SizedBox(height: 4),
+                              ),
+                              const SizedBox(height: 6),
+                              if (isUnread)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: _gradientEndColor, // Use the accent color for the badge
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: const Text(
+                                    "New",
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          );
+                        } else {
+                          timeAndUnreadBadge = const SizedBox();
+                        }
 
-                                StreamBuilder<DocumentSnapshot>(
-                                  stream: FirebaseFirestore.instance
-                                      .collection("chats")
-                                      .doc(chatId)
-                                      .snapshots(),
-                                  builder: (context, chatSnap) {
-                                    if (!chatSnap.hasData ||
-                                        !chatSnap.data!.exists) {
-                                      return Text(
-                                        "No messages yet",
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          color: Colors.grey.shade500,
-                                        ),
-                                      );
-                                    }
 
-                                    final data = chatSnap.data!.data()
-                                    as Map<String, dynamic>?;
-                                    if (data == null ||
-                                        data["lastMessage"] == null) {
-                                      return Text(
-                                        "No messages yet",
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          color: Colors.grey.shade500,
-                                        ),
-                                      );
-                                    }
+                        return Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: decoration,
+                          child: Row(
+                            children: [
+                              // 🌟 FIX APPLIED HERE: Manual Border for ProfileAvatar
+                              Container(
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: isUnread
+                                      ? Border.all(
+                                    color: _gradientEndColor.withOpacity(0.8),
+                                    width: 2,
+                                  )
+                                      : null,
+                                ),
+                                child: ProfileAvatar(
+                                  imageUrlOrPath: userData["profilePic"],
+                                  radius: 26,
+                                ),
+                              ),
+                              // ----------------------------------------------
+                              const SizedBox(width: 12),
 
-                                    final lastMsg = Map<String, dynamic>.from(data["lastMessage"]);
-                                    final senderId = lastMsg["senderId"];
+                              // Name + Last Message
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      name,
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                        color: _primaryTextColor,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 4),
 
-                                    String msgText = "";
-                                    if (lastMsg["type"] == null || lastMsg["type"] == "text") {
-                                      try {
-                                          final helper = EncryptionHelper(chatId);
-                                        msgText = helper.decryptText(lastMsg["text"]);
-                                      } catch (_) {
-                                        msgText = "[Message]";
-                                      }
-                                    } else if (lastMsg["type"] == "image") {
-                                      msgText = "📷 Photo";
-                                    } else if (lastMsg["type"] == "video") {
-                                      msgText = "🎥 Video";
-                                    } else if (lastMsg["type"] == "file") {
-                                      msgText = "📎 ${lastMsg["fileName"] ?? "File"}";
-                                    } else {
-                                      msgText = "[${lastMsg["type"]}]";
-                                    }
-
-                                    return Text(
-                                      senderId == currentUid ? "You: $msgText" : msgText,
+                                    // Last Message Text
+                                    Text(
+                                      lastMessageText,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
                                         fontSize: 13,
-                                        color: Colors.grey.shade600,
+                                        color: isUnread ? _primaryTextColor.withOpacity(0.8) : Colors.grey.shade600,
+                                        fontWeight: isUnread ? FontWeight.w600 : FontWeight.normal,
                                       ),
-                                    );
-                                  },
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
+                              ),
+
+                              // Time + Unread badge
+                              timeAndUnreadBadge,
+                            ],
                           ),
-
-                          // Time + Unread badge
-                          StreamBuilder<DocumentSnapshot>(
-                            stream: FirebaseFirestore.instance
-                                .collection("chats")
-                                .doc(chatId)
-                                .snapshots(),
-                            builder: (context, chatSnap) {
-                              if (!chatSnap.hasData ||
-                                  !chatSnap.data!.exists) {
-                                return const SizedBox();
-                              }
-
-                              final data = chatSnap.data!.data()
-                              as Map<String, dynamic>?;
-                              if (data == null ||
-                                  data["lastMessage"] == null) {
-                                return const SizedBox();
-                              }
-
-                              final lastMsg =
-                              Map<String, dynamic>.from(data["lastMessage"]);
-                              DateTime msgTime =
-                                  (lastMsg["createdAt"] as Timestamp?)
-                                      ?.toDate() ??
-                                      DateTime.now();
-
-                              bool isUnread = lastMsg["senderId"] !=
-                                  currentUid &&
-                                  !(lastMsg["readBy"]?[currentUid] ?? false);
-
-                              return Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    _formatTime(msgTime),
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey.shade600,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  if (isUnread)
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: Colors.redAccent,
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: const Text(
-                                        "New",
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              );
-                            },
-                          ),
-                        ],
-                      ),
+                        );
+                      },
                     ),
                   );
                 },
