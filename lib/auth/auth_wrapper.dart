@@ -148,7 +148,8 @@ class _MainHomeState extends State<MainHome> {
             const BottomNavigationBarItem(
                 icon: Icon(Icons.add_box), label: "Add"),
           const BottomNavigationBarItem(
-            icon: Icon(Icons.chat_bubble_outline),
+            icon: Icon(Icons.people),
+            // icon: Icon(Icons.),
             label: "Chat",
           ),
           const BottomNavigationBarItem(

@@ -56,6 +56,9 @@
     <string>This app needs access to your contacts to recommend connections.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>We need microphone access to send voice messages.</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>This app needs access to your photo library to save images and videos</string>
+
 
 </dict>
 </plist>

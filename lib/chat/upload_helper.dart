@@ -19,10 +19,10 @@ class UploadHelper {
   final Map<String, double> uploadProgress;
 
   UploadHelper(this._chatService, this.uploadProgress);
+
   Future<void> updateProfilePic(File file, BuildContext context) async {
     final uid = FirebaseAuth.instance.currentUser!.uid;
 
-    // Upload and get URL
     final url = await ProfileUploadHelper.uploadProfilePic(
       file: file,
       uid: uid,
@@ -30,7 +30,6 @@ class UploadHelper {
     );
 
     if (url != null) {
-      // ✅ Save download URL in Firestore under "users"
       await FirebaseFirestore.instance.collection("users").doc(uid).update({
         "profilePic": url,
       });
@@ -40,9 +39,10 @@ class UploadHelper {
       );
     }
   }
+
   Future<void> uploadMediaFile(
       File file, {
-        required String typeHint, // image | video | audio
+        required String typeHint, // image | video | audio | file
         required String originalName,
         int? durationMsHint,
         required BuildContext context,
@@ -60,23 +60,46 @@ class UploadHelper {
             ? 'image/jpeg'
             : typeHint == 'video'
             ? 'video/mp4'
-            : 'audio/m4a');
+            : 'application/octet-stream');
 
-    final baseName = originalName.replaceAll(RegExp(r'[^a-zA-Z0-9\._-]'), '_');
+    final baseName =
+    originalName.replaceAll(RegExp(r'[^a-zA-Z0-9\._-]'), '_');
     final storagePath =
         'chat_uploads/${_chatService.chatId}/${DateTime.now().millisecondsSinceEpoch}_$baseName';
 
     final ref = FirebaseStorage.instance.ref(storagePath);
-    final upload = ref.putFile(file, SettableMetadata(contentType: mime));
 
-    // track progress
-    uploadProgress[storagePath] = 0;
-    upload.snapshotEvents.listen((s) {
-      final total = s.totalBytes == 0 ? 1 : s.totalBytes;
-      uploadProgress[storagePath] = s.bytesTransferred / total;
+    // 🔹 Create a placeholder message in Firestore
+    final msgRef = _chatService.msgsCol.doc();
+    await msgRef.set({
+      'senderId': _chatService.currentUid,
+      'type': typeHint,
+      'fileName': baseName,
+      'fileSize': bytes,
+      'mime': mime,
+      'createdAt': FieldValue.serverTimestamp(),
+      'uploading': true,
+      'progress': 0.0,
+      'readBy': {_chatService.currentUid: true},
+      'deletedFor': <String, bool>{},
     });
 
-    final snap = await upload.whenComplete(() {});
+    // 🔹 Track upload progress
+    final uploadTask = ref.putFile(file, SettableMetadata(contentType: mime));
+    uploadProgress[storagePath] = 0;
+
+    uploadTask.snapshotEvents.listen((s) async {
+      final total = s.totalBytes == 0 ? 1 : s.totalBytes;
+      final progress = s.bytesTransferred / total;
+
+      uploadProgress[storagePath] = progress;
+
+      // update Firestore doc with progress
+      await msgRef.update({"progress": progress});
+    });
+
+    // 🔹 Wait for completion
+    final snap = await uploadTask.whenComplete(() {});
     final url = await snap.ref.getDownloadURL();
 
     String? thumbUrl;
@@ -85,7 +108,7 @@ class UploadHelper {
     int? durationMs = durationMsHint;
 
     if (typeHint == 'video') {
-      // generate thumbnail
+      // Generate thumbnail
       final uint8 = await VideoThumbnail.thumbnailData(
         video: file.path,
         imageFormat: ImageFormat.JPEG,
@@ -110,38 +133,36 @@ class UploadHelper {
         height = vp.value.size.height.toInt();
         await vp.dispose();
       } catch (_) {}
-
-      await _chatService.sendMediaMessage(
-        type: 'video',
-        fileUrl: url,
-        fileName: baseName,
-        fileSize: bytes,
-        mime: mime,
-        thumbUrl: thumbUrl,
-        durationMs: durationMs,
-        width: width,
-        height: height,
-      );
-    } else if (typeHint == 'image') {
-      await _chatService.sendMediaMessage(
-        type: 'image',
-        fileUrl: url,
-        fileName: baseName,
-        fileSize: bytes,
-        mime: mime,
-      );
-    } else if (typeHint == 'audio') {
-      durationMs ??= 0;
-      await _chatService.sendMediaMessage(
-        type: 'audio',
-        fileUrl: url,
-        fileName: baseName,
-        fileSize: bytes,
-        mime: mime,
-        durationMs: durationMs,
-      );
     }
 
+    // 🔹 Update the placeholder message with final data
+    await msgRef.update({
+      'fileUrl': url,
+      'thumbUrl': thumbUrl,
+      'durationMs': durationMs,
+      'width': width,
+      'height': height,
+      'uploading': false,
+      'progress': null,
+    });
+
     uploadProgress.remove(storagePath);
+
+    // 🔹 Update chat's last message
+    await _chatService.chatRef.set(
+      {
+        'updatedAt': FieldValue.serverTimestamp(),
+        'lastMessage': {
+          'id': msgRef.id,
+          'type': typeHint,
+          'fileUrl': url,
+          'fileName': baseName,
+          'senderId': _chatService.currentUid,
+          'createdAt': FieldValue.serverTimestamp(),
+          'readBy': {_chatService.currentUid: true, _chatService.otherUserId: false},
+        },
+      },
+      SetOptions(merge: true),
+    );
   }
 }

@@ -1,8 +1,10 @@
+import 'dart:io';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart' as ep;
-import 'package:flutter/services.dart';
+import 'package:gallery_saver_plus/gallery_saver.dart';
 
 import 'chat_service.dart';
 import 'forward_page.dart';
@@ -58,110 +60,60 @@ class _ChatPageState extends State<ChatPage> {
     }
     _clearSelection();
   }
-  void _showDeleteOptions(String msgId) async {
-    final doc = await _chatService.msgsCol.doc(msgId).get();
-    if (!doc.exists) return;
-    final data = doc.data()!;
-    final isMine = data["senderId"] == _chatService.currentUid;
 
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (_) => SafeArea(
-        child: Wrap(
-          children: [
-            ListTile(
-              leading: const Icon(Icons.delete_outline),
-              title: const Text("Delete for me"),
-              onTap: () async {
-                Navigator.pop(context);
-                await _chatService.deleteMessage(msgId, forBoth: false);
-              },
-            ),
-            if (isMine)
-              ListTile(
-                leading: const Icon(Icons.delete_forever, color: Colors.red),
-                title: const Text("Delete for everyone"),
-                onTap: () async {
-                  Navigator.pop(context);
-                  await _chatService.deleteMessage(msgId, forBoth: true);
-                },
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-  void _showMessageOptions(String msgId) async {
-    final doc = await _chatService.msgsCol.doc(msgId).get();
-    if (!doc.exists) return;
-    final data = doc.data()!;
-    final isMine = data["senderId"] == _chatService.currentUid;
-    final isText = data["type"] == null || data["type"] == "text";
+  Future<void> _saveMediaHelper(String url, String fileName, String type) async {
+    bool? success;
+    try {
+      if (type == "image") {
+        success = await GallerySaver.saveImage(url, albumName: "MyApp");
+      } else if (type == "video") {
+        success = await GallerySaver.saveVideo(url, albumName: "MyApp");
+      } else {
+        final dir = Directory("/storage/emulated/0/Download");
+        if (!await dir.exists()) await dir.create(recursive: true);
+        final savePath = "${dir.path}/$fileName";
+        final dio = Dio();
+        final response = await dio.download(url, savePath);
+        if (response.statusCode == 200) success = true;
+      }
 
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (_) => SafeArea(
-        child: Wrap(
-          children: [
-            if (isText)
-              ListTile(
-                leading: const Icon(Icons.copy),
-                title: const Text("Copy"),
-                onTap: () {
-                  Navigator.pop(context);
-                  final text = _chatService.decryptTextSafe(data["text"]);
-                  Clipboard.setData(ClipboardData(text: text));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Copied to clipboard")),
-                  );
-                },
-              ),
-            ListTile(
-              leading: const Icon(Icons.reply),
-              title: const Text("Reply"),
-              onTap: () {
-                Navigator.pop(context);
-                // TODO: Implement reply UI → set reply state
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.forward),
-              title: const Text("Forward"),
-              onTap: () {
-                Navigator.pop(context);
-                _forwardMessage(data);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete_outline),
-              title: const Text("Delete for me"),
-              onTap: () async {
-                Navigator.pop(context);
-                await _chatService.deleteMessage(msgId, forBoth: false);
-              },
-            ),
-            if (isMine)
-              ListTile(
-                leading: const Icon(Icons.delete_forever, color: Colors.red),
-                title: const Text("Delete for everyone"),
-                onTap: () async {
-                  Navigator.pop(context);
-                  await _chatService.deleteMessage(msgId, forBoth: true);
-                },
-              ),
-          ],
-        ),
-      ),
-    );
+      if (success == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Saved successfully: $fileName")),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Failed to save file")),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: $e")),
+      );
+    }
   }
+
+  Future<void> _downloadSelected() async {
+    if (_selectedMsgIds.isEmpty) return;
+
+    for (final id in _selectedMsgIds) {
+      final doc = await _chatService.msgsCol.doc(id).get();
+      if (!doc.exists) continue;
+      final m = doc.data()!;
+
+      final url = m['fileUrl'];
+      final fileName =
+          m['fileName'] ?? "file_${DateTime.now().millisecondsSinceEpoch}";
+      final type = m['type'] ?? 'file';
+
+      if (url != null) {
+        await _saveMediaHelper(url, fileName, type);
+      }
+    }
+
+    _clearSelection();
+  }
+
   Map<String, dynamic>? _replyingTo;
 
   void _setReply(Map<String, dynamic> message, String msgId) {
@@ -175,6 +127,7 @@ class _ChatPageState extends State<ChatPage> {
       _replyingTo = null;
     });
   }
+
   void _forwardMessage(Map<String, dynamic> message) {
     Navigator.push(
       context,
@@ -186,6 +139,7 @@ class _ChatPageState extends State<ChatPage> {
       ),
     );
   }
+
   @override
   void initState() {
     super.initState();
@@ -204,7 +158,6 @@ class _ChatPageState extends State<ChatPage> {
         children: [
           Expanded(child: _buildMessageList()),
           _buildInputBar(),
-
           if (_showEmoji) _buildEmojiPicker(),
         ],
       ),
@@ -254,6 +207,10 @@ class _ChatPageState extends State<ChatPage> {
       actions: _selectionMode
           ? [
         IconButton(
+          icon: const Icon(Icons.download, color: Colors.blue),
+          onPressed: _downloadSelected,
+        ),
+        IconButton(
           icon: const Icon(Icons.delete, color: Colors.red),
           onPressed: _deleteSelected,
         ),
@@ -263,18 +220,34 @@ class _ChatPageState extends State<ChatPage> {
         ),
       ]
           : [
-        IconButton(
-            onPressed: () {},
-            icon: const Icon(Icons.call, color: Colors.blue)),
-        IconButton(
-            onPressed: () {},
-            icon: const Icon(Icons.videocam, color: Colors.blue)),
-        IconButton(
-            onPressed: () {},
-            icon: const Icon(Icons.more_vert, color: Colors.black87)),
+        // IconButton(
+        //     onPressed: () {},
+        //     icon: const Icon(Icons.call, color: Colors.blue)),
+        // IconButton(
+        //     onPressed: () {},
+        //     icon: const Icon(Icons.videocam, color: Colors.blue)),
+        PopupMenuButton<String>(
+          icon: const Icon(Icons.more_vert, color: Colors.black87),
+          onSelected: (value) {
+            if (value == "select") {
+              setState(() {
+                _selectionMode = true;
+              });
+            }
+          },
+          itemBuilder: (_) => const [
+            PopupMenuItem(
+              value: "select",
+              child: Text("Select"),
+            ),
+          ],
+        ),
       ],
     );
   }
+
+  int _lastMessageCount = 0;
+  bool _initialScrolled = false;
 
   Widget _buildMessageList() {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -283,16 +256,37 @@ class _ChatPageState extends State<ChatPage> {
         if (!snap.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
+
         final docs = snap.data!.docs;
         _chatService.markDelivered(docs);
+
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_chatService.scrollController.hasClients) {
+            final pos = _chatService.scrollController.position;
+            if (!_initialScrolled && docs.isNotEmpty) {
+              _chatService.scrollController.jumpTo(pos.maxScrollExtent);
+              _initialScrolled = true;
+            }
+            if (docs.length > _lastMessageCount) {
+              _chatService.scrollController.animateTo(
+                pos.maxScrollExtent,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOut,
+              );
+            }
+          }
+        });
+
+        _lastMessageCount = docs.length;
 
         return ListView.builder(
           controller: _chatService.scrollController,
           padding: const EdgeInsets.all(12),
           itemCount: docs.length,
           itemBuilder: (context, i) {
-            final msgId = docs[i].id;
-            final m = docs[i].data();
+            final doc = docs[i];
+            final msgId = doc.id;
+            final m = doc.data();
 
             if (m["deletedFor"]?[_chatService.currentUid] == true) {
               return const SizedBox.shrink();
@@ -308,11 +302,19 @@ class _ChatPageState extends State<ChatPage> {
               isSelected: _selectedMsgIds.contains(msgId),
               selectionMode: _selectionMode,
               onTap: () {
-                if (_selectionMode) _toggleSelection(msgId);
+                if (_selectionMode) {
+                  _toggleSelection(msgId);
+                }
               },
               onLongPress: () {
-                _showMessageOptions(msgId);
+                if (_selectionMode) {
+                  _toggleSelection(msgId);
+                } else {
+                  // rely on MessageBubble context menu
+                }
               },
+              onReply: _setReply,
+              onForward: _forwardMessage,
             );
           },
         );
@@ -324,15 +326,15 @@ class _ChatPageState extends State<ChatPage> {
     return SafeArea(
       top: false,
       child: Container(
-        color: Colors.white, // ✅ whole bottom is white
+        color: Colors.white,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // 🔹 Reply preview (if replying)
             if (_replyingTo != null)
               Container(
                 padding: const EdgeInsets.all(8),
-                margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                margin:
+                const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: Colors.grey.shade200,
                   borderRadius: BorderRadius.circular(8),
@@ -346,7 +348,8 @@ class _ChatPageState extends State<ChatPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            _replyingTo!["senderId"] == _chatService.currentUid
+                            _replyingTo!["senderId"] ==
+                                _chatService.currentUid
                                 ? "You"
                                 : widget.otherUserName,
                             style: const TextStyle(
@@ -371,33 +374,27 @@ class _ChatPageState extends State<ChatPage> {
                   ],
                 ),
               ),
-
-            // 🔹 Divider line
             const Divider(height: 1, color: Colors.black12),
-
-            // 🔹 Main bar
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+              padding:
+              const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
               child: Row(
                 children: [
-                  // Emoji button
                   IconButton(
                     icon: const Icon(Icons.emoji_emotions_outlined,
                         color: Colors.grey),
-                    onPressed: () => setState(() => _showEmoji = !_showEmoji),
+                    onPressed: () =>
+                        setState(() => _showEmoji = !_showEmoji),
                   ),
-
-                  // Attachments
                   IconButton(
                     icon: const Icon(Icons.attach_file, color: Colors.grey),
-                    onPressed: () => _chatService.openAttachmentSheet(context),
+                    onPressed: () =>
+                        _chatService.openAttachmentSheet(context),
                   ),
-
-                  // Input box
                   Expanded(
                     child: Container(
-                      padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 10),
                       decoration: BoxDecoration(
                         color: Colors.grey.shade100,
                         borderRadius: BorderRadius.circular(24),
@@ -418,10 +415,7 @@ class _ChatPageState extends State<ChatPage> {
                       ),
                     ),
                   ),
-
                   const SizedBox(width: 6),
-
-                  // Send / Mic button
                   Container(
                     width: 44,
                     height: 44,

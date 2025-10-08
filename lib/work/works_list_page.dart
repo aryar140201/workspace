@@ -8,12 +8,16 @@ class WorksListPage extends StatefulWidget {
   final String userRole;
   final String uid;
   final String? initialStatusFilter;
+  // 🎯 FIX 1: Add the new named parameter here
+  final String? assignmentTypeFilter;
 
   const WorksListPage({
     super.key,
     required this.userRole,
     required this.uid,
     this.initialStatusFilter,
+    // 🎯 FIX 1: Add the parameter to the constructor
+    this.assignmentTypeFilter,
   });
 
   @override
@@ -166,13 +170,19 @@ class _WorksListPageState extends State<WorksListPage> {
       BuildContext context,
       QueryDocumentSnapshot doc,
       Map<String, dynamic> data,
-      String assigneeName,
+      String userInvolvedName, // Renamed from assigneeName for clarity
       ) {
     String title = data["title"] ?? "Untitled";
     String status = data["status"] ?? "Pending";
-    String assigneeId = data["assignedTo"];
+    String assignedToId = data["assignedTo"];
+    String assignedById = data["assignedBy"];
     DateTime? dueDate =
     data["dueDate"] != null ? (data["dueDate"] as Timestamp).toDate() : null;
+
+    // Determine who the name represents based on the filter
+    String userLabel = widget.assignmentTypeFilter == 'assignedTo' ? 'From' : 'To';
+    String displayUserId = widget.assignmentTypeFilter == 'assignedTo' ? assignedById : assignedToId;
+
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8),
@@ -216,7 +226,7 @@ class _WorksListPageState extends State<WorksListPage> {
           ),
           const SizedBox(height: 10),
 
-          // Assignee
+          // User Involved (Assignee/Assigner)
           Row(
             children: [
               const CircleAvatar(
@@ -226,7 +236,7 @@ class _WorksListPageState extends State<WorksListPage> {
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: Text("Assignee: $assigneeName",
+                child: Text("$userLabel: $userInvolvedName",
                     style: const TextStyle(fontSize: 14)),
               ),
             ],
@@ -252,8 +262,11 @@ class _WorksListPageState extends State<WorksListPage> {
           Align(
             alignment: Alignment.centerRight,
             child: ElevatedButton.icon(
+              // NOTE: We pass assignedToId here because they are the one whose work status is being changed.
+              // If the user role is 'Company' (Assigner), they change the status for the 'Assignee' (assignedToId).
+              // If the user role is 'Freelancer' (Assignee), they change the status for themselves (using their own ID for notification)
               onPressed: () => _changeStatus(
-                  context, doc.reference, status, assigneeId, title),
+                  context, doc.reference, status, assignedToId, title),
               icon: const Icon(Icons.edit, size: 18),
               label: const Text("Change Status"),
               style: ElevatedButton.styleFrom(
@@ -269,11 +282,41 @@ class _WorksListPageState extends State<WorksListPage> {
     );
   }
 
+  // 🎯 FIX 2: Create the Stream based on the assignmentTypeFilter
+  Stream<QuerySnapshot> _getTasksStream() {
+    Query query = FirebaseFirestore.instance.collection("tasks");
+
+    // Determine the field to filter by
+    String filterField;
+    if (widget.assignmentTypeFilter == 'assignedTo') {
+      filterField = 'assignedTo';
+    } else {
+      // Default to 'assignedBy' if filter is not explicitly 'assignedTo'
+      // This covers 'assignedBy' or any unexpected/null value, maintaining the original screen's purpose.
+      filterField = 'assignedBy';
+    }
+
+    query = query.where(filterField, isEqualTo: widget.uid);
+    query = query.orderBy("createdAt", descending: true);
+
+    return query.snapshots() as Stream<QuerySnapshot>;
+  }
+
+  // 🎯 FIX 3: Dynamic App Bar Title
+  String _getAppBarTitle() {
+    if (widget.assignmentTypeFilter == 'assignedTo') {
+      return "My Assigned Works";
+    }
+    return "Works Assigned By Me";
+  }
+
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(" Works Assigned By Me"),
+        // 🎯 FIX 3: Use dynamic title
+        title: Text(_getAppBarTitle()),
         flexibleSpace: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
@@ -295,7 +338,7 @@ class _WorksListPageState extends State<WorksListPage> {
                 Expanded(
                   child: TextField(
                     decoration: InputDecoration(
-                      hintText: "Search by assignee",
+                      hintText: "Search by user...",
                       prefixIcon: const Icon(Icons.search, color: Colors.grey),
                       filled: true,
                       fillColor: Colors.grey.shade100,
@@ -354,7 +397,8 @@ class _WorksListPageState extends State<WorksListPage> {
                                 "Cancel",
                                 "Failed",
                                 "Rework",
-                                "Paid"
+                                "Paid",
+                                "In Progress", // Added common status
                               ].map((status) {
                                 return ChoiceChip(
                                   label: Text(status),
@@ -387,17 +431,22 @@ class _WorksListPageState extends State<WorksListPage> {
           // List of Tasks
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection("tasks")
-                  .where("assignedBy", isEqualTo: widget.uid)
-                  .orderBy("createdAt", descending: true)
-                  .snapshots(),
+              // 🎯 FIX 2: Use the new stream function to apply 'assignedTo'/'assignedBy' filter
+              stream: _getTasksStream(),
               builder: (context, snapshot) {
-                if (!snapshot.hasData) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
+                if (snapshot.hasError) {
+                  return Center(child: Text("Error: ${snapshot.error}"));
+                }
+                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  return const Center(child: Text("🙌 No works found for this view."));
+                }
+
                 var tasks = snapshot.data!.docs;
 
+                // First, apply filter based on initialStatusFilter and searchName (Done in FutureBuilder below)
                 var filtered = tasks.where((doc) {
                   var data = doc.data() as Map<String, dynamic>;
                   String status = data["status"] ?? "";
@@ -405,9 +454,11 @@ class _WorksListPageState extends State<WorksListPage> {
                       ? (data["dueDate"] as Timestamp).toDate()
                       : null;
 
+                  // Status Filter
                   if (selectedStatus != null && status != selectedStatus) {
                     return false;
                   }
+                  // Date Filter
                   if (selectedDate != null &&
                       (dueDate == null ||
                           dueDate.day != selectedDate!.day ||
@@ -415,37 +466,54 @@ class _WorksListPageState extends State<WorksListPage> {
                           dueDate.year != selectedDate!.year)) {
                     return false;
                   }
+                  // Search filter is applied inside FutureBuilder
                   return true;
                 }).toList();
 
                 if (filtered.isEmpty) {
-                  return const Center(child: Text("🙌 No works found"));
+                  return const Center(child: Text("🙌 No works match the current filters."));
                 }
+
+                // Determine the ID of the user whose name we need to fetch for the card
+                final String userToFetchField =
+                widget.assignmentTypeFilter == 'assignedTo' ? 'assignedBy' : 'assignedTo';
+
 
                 return ListView.builder(
                   padding: const EdgeInsets.all(16),
                   itemCount: filtered.length,
                   itemBuilder: (context, index) {
                     var data = filtered[index].data() as Map<String, dynamic>;
-                    String assigneeId = data["assignedTo"] ?? "";
+                    String userToFetchId = data[userToFetchField] ?? ""; // Get the ID of the other party
 
                     return FutureBuilder<Map<String, dynamic>?>(
-                      future: _getUserData(assigneeId),
+                      future: _getUserData(userToFetchId),
                       builder: (context, snap) {
-                        if (!snap.hasData) return const SizedBox();
+                        if (snap.connectionState == ConnectionState.waiting) return const SizedBox();
+                        if (!snap.hasData || snap.data == null) {
+                          // This might happen if a user was deleted, show a placeholder
+                          return _buildTaskCard(
+                            context,
+                            filtered[index],
+                            data,
+                            "Unknown User",
+                          );
+                        }
+
                         var user = snap.data!;
+                        String userName = user["name"] ?? "User";
+
+                        // Apply Search Filter on the fetched name
                         if (searchName.isNotEmpty &&
-                            !user["name"]
-                                .toString()
-                                .toLowerCase()
-                                .contains(searchName)) {
+                            !userName.toString().toLowerCase().contains(searchName)) {
                           return const SizedBox();
                         }
+
                         return _buildTaskCard(
                           context,
                           filtered[index],
                           data,
-                          user["name"],
+                          userName,
                         );
                       },
                     );

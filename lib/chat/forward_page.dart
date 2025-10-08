@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Import for SystemUiOverlayStyle
 
 import 'chat_service.dart';
 
@@ -19,95 +20,155 @@ class ForwardPage extends StatelessWidget {
     final firestore = FirebaseFirestore.instance;
     final currentUid = FirebaseAuth.instance.currentUser!.uid;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text("Forward To")),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: firestore
-            .collection("connections")
-            .where("status", isEqualTo: "Connected")
-            .where(
-          Filter.or(
-            Filter("userA", isEqualTo: currentUid),
-            Filter("userB", isEqualTo: currentUid),
+    final SystemUiOverlayStyle overlayStyle = SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+      statusBarBrightness: Brightness.dark,
+    );
+    // If your gradient is dark, use:
+    // final SystemUiOverlayStyle overlayStyle = SystemUiOverlayStyle(
+    //   statusBarColor: Colors.transparent,
+    //   statusBarIconBrightness: Brightness.light,
+    //   statusBarBrightness: Brightness.dark, // For iOS
+    // );
+
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: overlayStyle,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text(
+            "Forward To",
+            style: TextStyle(color: Colors.white),
           ),
-        )
-            .snapshots(),
-        builder: (context, snap) {
-          if (!snap.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
+          iconTheme: IconThemeData(color: Colors.white),
+          flexibleSpace: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF1976D2), Color(0xFF64B5F6)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+          ),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+        ),
 
-          final connections = snap.data!.docs;
+        backgroundColor: Colors.blue.shade50,
+        body: StreamBuilder<QuerySnapshot>(
+          stream: firestore
+              .collection("connections")
+              .where("status", isEqualTo: "Connected")
+              .where(
+            Filter.or(
+              Filter("userA", isEqualTo: currentUid),
+              Filter("userB", isEqualTo: currentUid),
+            ),
+          )
+              .snapshots(),
+          builder: (context, snap) {
+            if (!snap.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-          if (connections.isEmpty) {
-            return const Center(child: Text("No connections available"));
-          }
+            final connections = snap.data!.docs;
 
-          return ListView.builder(
-            itemCount: connections.length,
-            itemBuilder: (context, i) {
-              final conn = connections[i].data() as Map<String, dynamic>;
-              final otherUserId =
-              conn["userA"] == currentUid ? conn["userB"] : conn["userA"];
+            if (connections.isEmpty) {
+              return const Center(child: Text("No connections available"));
+            }
 
-              return FutureBuilder<DocumentSnapshot>(
-                future: firestore.collection("users").doc(otherUserId).get(),
-                builder: (context, userSnap) {
-                  if (userSnap.connectionState == ConnectionState.waiting) {
-                    return const SizedBox();
-                  }
-                  if (!userSnap.hasData || !userSnap.data!.exists) {
-                    return const SizedBox(); // user doc not found
-                  }
+            return ListView.builder(
+              itemCount: connections.length,
+              itemBuilder: (context, i) {
+                final conn = connections[i].data() as Map<String, dynamic>;
+                final otherUserId =
+                conn["userA"] == currentUid ? conn["userB"] : conn["userA"];
 
-                  final rawData = userSnap.data!.data();
-                  if (rawData == null) {
-                    return const SizedBox(); // avoid null cast
-                  }
+                return FutureBuilder<DocumentSnapshot>(
+                  future: firestore.collection("users").doc(otherUserId).get(),
+                  builder: (context, userSnap) {
+                    if (userSnap.connectionState == ConnectionState.waiting) {
+                      return const SizedBox.shrink(); // Use shrink for less space when loading
+                    }
+                    if (!userSnap.hasData || !userSnap.data!.exists) {
+                      return const SizedBox.shrink(); // user doc not found
+                    }
 
-                  final user = rawData as Map<String, dynamic>;
-                  final userName = (user["name"] ?? "Unknown") as String;
-                  final profilePic = user["profilePic"] as String?;
+                    final rawData = userSnap.data!.data();
+                    if (rawData == null) {
+                      return const SizedBox.shrink(); // avoid null cast
+                    }
 
-                  return ListTile(
-                    leading: CircleAvatar(
-                      backgroundImage: profilePic != null ? NetworkImage(profilePic) : null,
-                      child: profilePic == null
-                          ? Text(userName.isNotEmpty ? userName[0].toUpperCase() : "?")
-                          : null,
-                    ),
-                    title: Text(userName),
-                    onTap: () async {
-                      final cs = ChatService(otherUserId);
-                      await cs.ensureChat();
+                    final user = rawData as Map<String, dynamic>;
+                    final userName = (user["name"] ?? "Unknown") as String;
+                    final profilePic = user["profilePic"] as String?;
 
-                      if (message["text"] != null) {
-                        // ✅ Decrypt using original chat service
-                        final decrypted = chatService.decryptTextSafe(message["text"]);
+                    return ListTile(
+                      leading: CircleAvatar(
+                        backgroundImage: profilePic != null && profilePic.isNotEmpty
+                            ? NetworkImage(profilePic)
+                            : null,
+                        child: profilePic == null || profilePic.isEmpty
+                            ? Text(userName.isNotEmpty ? userName[0].toUpperCase() : "?")
+                            : null,
+                      ),
+                      title: Text(userName),
+                      onTap: () async {
+                        // Ensure the context is still valid if operations are long
+                        if (!context.mounted) return;
 
-                        // ✅ Send plain text in new chat
-                        cs.textController.text = decrypted;
-                        await cs.sendText();
-                      } else {
-                        await cs.sendMediaMessage(
-                          type: message["type"],
-                          fileUrl: message["fileUrl"],
-                          fileName: message["fileName"],
-                          mime: message["mime"],
+                        final cs = ChatService(otherUserId);
+                        await cs.ensureChat();
+
+                        final now = FieldValue.serverTimestamp();
+                        final newMsgRef = cs.msgsCol.doc();
+
+                        final msg = {
+                          "senderId": cs.currentUid,
+                          "type": message["type"],
+                          "fileUrl": message["fileUrl"],  // reuse existing file URL
+                          "fileName": message["fileName"],
+                          "mime": message["mime"],
+                          "createdAt": now,
+                          "deliveredBy": <String, bool>{},
+                          "readBy": {cs.currentUid: true},
+                          "deletedFor": <String, bool>{},
+                        };
+
+                        // Save forwarded message
+                        await newMsgRef.set(msg);
+
+                        // Update chat's lastMessage
+                        await cs.chatRef.set(
+                          {
+                            "updatedAt": now,
+                            "lastMessage": {
+                              "id": newMsgRef.id,
+                              "type": message["type"],
+                              "fileUrl": message["fileUrl"],
+                              "fileName": message["fileName"],
+                              "senderId": cs.currentUid,
+                              "createdAt": now,
+                              "readBy": {cs.currentUid: true, otherUserId: false},
+                            },
+                          },
+                          SetOptions(merge: true),
                         );
-                      }
 
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text("Forwarded to ${user["name"]}")),
-                      );
-                    },
-                  );
-                },
-              );
-            },
-          );
-        },
+                        if (!context.mounted) return;
+                        Navigator.pop(context); // Pop current page
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text("Forwarded to ${user["name"]}")),
+                        );
+                      },
+                    );
+                  },
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }

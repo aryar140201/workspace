@@ -4,10 +4,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:mime/mime.dart';
 
-import '../core/fcm_sender.dart';
 import 'encryption_helper.dart';
-import 'upload_helper.dart';
 
 class ChatService {
   final String otherUserId;
@@ -24,14 +24,12 @@ class ChatService {
   late final EncryptionHelper _crypto;
   final ImagePicker _picker = ImagePicker();
   final Map<String, double> uploadProgress = {};
-  late final UploadHelper _uploader;
 
   ChatService(this.otherUserId) {
     currentUid = _auth.currentUser!.uid;
     final ids = [currentUid, otherUserId]..sort();
     chatId = "${ids[0]}_${ids[1]}";
     _crypto = EncryptionHelper(chatId);
-    _uploader = UploadHelper(this, uploadProgress);
   }
 
   DocumentReference<Map<String, dynamic>> get chatRef => chatsCol.doc(chatId);
@@ -52,39 +50,39 @@ class ChatService {
     }
   }
 
-  // Future<void> sendText() async {
-  //   final text = textController.text.trim();
-  //   if (text.isEmpty) return;
-  //
-  //   final encrypted = _crypto.encryptText(text);
-  //   final msgDoc = {
-  //     "text": encrypted,
-  //     "senderId": currentUid,
-  //     "createdAt": FieldValue.serverTimestamp(),
-  //     "readBy": {currentUid: true},
-  //   };
-  //
-  //   await msgsCol.add(msgDoc);
-  //
-  //   await chatRef.set({
-  //     "lastMessage": msgDoc,
-  //     "updatedAt": FieldValue.serverTimestamp(),
-  //   }, SetOptions(merge: true));
-  //
-  //   textController.clear();
-  //   _scrollToBottom();
-  // }
+  /// ✅ Mark delivered with timestamp
+  Future<void> markDelivered(
+      Iterable<QueryDocumentSnapshot<Map<String, dynamic>>> docs) async {
+    for (final d in docs) {
+      final m = d.data();
+      if (m["senderId"] != currentUid) {
+        final deliveredMap = (m["deliveredBy"] as Map?) ?? {};
+        if (!deliveredMap.containsKey(currentUid)) {
+          await d.reference.update({
+            "deliveredBy.$currentUid": FieldValue.serverTimestamp(),
+          });
+        }
+      }
+    }
+  }
+
+  /// ✅ Send text message
   Future<void> sendText({Map<String, dynamic>? replyTo}) async {
     final text = textController.text.trim();
     if (text.isEmpty) return;
 
     final encrypted = _crypto.encryptText(text);
+    final msgId = msgsCol.doc().id;
 
     final msgDoc = {
+      "id": msgId,
+      "type": "text",
       "text": encrypted,
       "senderId": currentUid,
       "createdAt": FieldValue.serverTimestamp(),
-      "readBy": {currentUid: true},
+      "deliveredBy": {},
+      "readBy": {},
+      "deletedFor": {},
       if (replyTo != null)
         "replyTo": {
           "id": replyTo["id"],
@@ -95,10 +93,9 @@ class ChatService {
         },
     };
 
-    // Save message
-    await msgsCol.add(msgDoc);
+    await msgsCol.doc(msgId).set(msgDoc);
 
-    // Update chat last message
+    // update chat preview
     await chatRef.set({
       "lastMessage": msgDoc,
       "updatedAt": FieldValue.serverTimestamp(),
@@ -107,58 +104,78 @@ class ChatService {
     textController.clear();
     _scrollToBottom();
   }
+
+  /// ✅ Upload & send media
   Future<void> sendMediaMessage({
-    required String type,
-    String? fileUrl,
-    String? fileName,
-    int? fileSize,
-    String? mime,
-    String? thumbUrl,
-    int? durationMs,
-    int? width,
-    int? height,
+    required File file,
+    required String type, // "image", "video", "file"
+    String? originalName,
+    Map<String, dynamic>? extraMeta,
   }) async {
     final now = FieldValue.serverTimestamp();
     final newMsgRef = msgsCol.doc();
 
+    final fileSize = await file.length();
+    final mime = lookupMimeType(file.path) ?? "application/octet-stream";
+
     final msg = {
+      'id': newMsgRef.id,
       'senderId': currentUid,
       'type': type,
-      'fileUrl': fileUrl,
-      'fileName': fileName,
+      'fileUrl': null,
+      'fileName': originalName ?? file.path.split("/").last,
       'fileSize': fileSize,
       'mime': mime,
-      'thumbUrl': thumbUrl,
-      'durationMs': durationMs,
-      'width': width,
-      'height': height,
       'createdAt': now,
-      'deliveredBy': <String, bool>{},
-      'readBy': {currentUid: true},
-      'deletedFor': <String, bool>{},
+      'deliveredBy': {},
+      'readBy': {},
+      'deletedFor': {},
+      'uploading': true,
+      'progress': 0.0,
+      ...?extraMeta,
     };
 
-    final batch = FirebaseFirestore.instance.batch();
-    batch.set(newMsgRef, msg);
-    batch.set(
-      chatRef,
+    await newMsgRef.set(msg);
+
+    await chatRef.set(
       {
         'updatedAt': now,
         'lastMessage': {
           'id': newMsgRef.id,
           'type': type,
-          'fileUrl': fileUrl,
-          'fileName': fileName,
+          'fileName': msg['fileName'],
           'senderId': currentUid,
           'createdAt': now,
-          'readBy': {currentUid: true, otherUserId: false},
+          'readBy': {},
         },
       },
       SetOptions(merge: true),
     );
 
-    await batch.commit();
     _scrollToBottom();
+
+    // Upload to Firebase Storage
+    final storageRef = FirebaseStorage.instance
+        .ref("chatMedia/$chatId/${newMsgRef.id}_${msg['fileName']}");
+
+    final uploadTask =
+    storageRef.putFile(file, SettableMetadata(contentType: mime));
+
+    uploadTask.snapshotEvents.listen((event) async {
+      final progress =
+          event.bytesTransferred / (event.totalBytes == 0 ? 1 : event.totalBytes);
+
+      await newMsgRef.update({"progress": progress});
+
+      if (event.state == TaskState.success) {
+        final url = await storageRef.getDownloadURL();
+        await newMsgRef.update({
+          "fileUrl": url,
+          "uploading": false,
+          "progress": null,
+        });
+      }
+    });
   }
 
   void _scrollToBottom() {
@@ -173,42 +190,24 @@ class ChatService {
     });
   }
 
+  /// ✅ Mark messages as read (with timestamp)
   Future<void> markAllRead() async {
-    final unread =
-    await msgsCol.where("readBy.$currentUid", isEqualTo: false).get();
-    for (final d in unread.docs) {
-      d.reference.update({"readBy.$currentUid": true});
-    }
-  }
-
-  Future<void> markDelivered(
-      Iterable<QueryDocumentSnapshot<Map<String, dynamic>>> docs) async {
-    for (final d in docs) {
+    final snap = await msgsCol.get();
+    for (final d in snap.docs) {
       final m = d.data();
       if (m["senderId"] != currentUid) {
-        d.reference.update({"deliveredBy.$currentUid": true});
+        final readMap = (m["readBy"] as Map?) ?? {};
+        if (!readMap.containsKey(currentUid)) {
+          await d.reference.update({
+            "readBy.$currentUid": FieldValue.serverTimestamp(),
+          });
+        }
       }
     }
   }
 
-  // Future<void> deleteMessage(String id, {bool forBoth = false}) async {
-  //   final docRef = msgsCol.doc(id);
-  //   final snap = await docRef.get();
-  //   if (!snap.exists) return;
-  //
-  //   final data = snap.data()!;
-  //   final senderId = data['senderId'];
-  //
-  //   if (forBoth) {
-  //     if (senderId == currentUid) {
-  //       await docRef.delete();
-  //     } else {
-  //       await docRef.update({"deletedFor.$currentUid": true});
-  //     }
-  //   } else {
-  //     await docRef.update({"deletedFor.$currentUid": true});
-  //   }
-  // }
+
+  /// ✅ Delete message (time-sensitive)
   Future<void> deleteMessage(String id, {bool forBoth = false}) async {
     final docRef = msgsCol.doc(id);
     final snap = await docRef.get();
@@ -234,7 +233,6 @@ class ChatService {
         });
       }
     } else {
-      // 👤 Delete only for me
       await docRef.update({
         "deletedFor.$currentUid": true,
       });
@@ -246,6 +244,7 @@ class ChatService {
     return _crypto.decryptText(cipherJson);
   }
 
+  /// ✅ Attachment sheet
   void openAttachmentSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -258,14 +257,12 @@ class ChatService {
               title: const Text("Camera"),
               onTap: () async {
                 Navigator.pop(context);
-                final xfile =
-                await _picker.pickImage(source: ImageSource.camera);
+                final xfile = await _picker.pickImage(source: ImageSource.camera);
                 if (xfile != null) {
-                  await _uploader.uploadMediaFile(
-                    File(xfile.path),
-                    typeHint: 'image',
+                  await sendMediaMessage(
+                    file: File(xfile.path),
+                    type: 'image',
                     originalName: xfile.name,
-                    context: context,
                   );
                 }
               },
@@ -275,14 +272,12 @@ class ChatService {
               title: const Text("Gallery"),
               onTap: () async {
                 Navigator.pop(context);
-                final xfile =
-                await _picker.pickImage(source: ImageSource.gallery);
+                final xfile = await _picker.pickImage(source: ImageSource.gallery);
                 if (xfile != null) {
-                  await _uploader.uploadMediaFile(
-                    File(xfile.path),
-                    typeHint: 'image',
+                  await sendMediaMessage(
+                    file: File(xfile.path),
+                    type: 'image',
                     originalName: xfile.name,
-                    context: context,
                   );
                 }
               },
@@ -292,14 +287,12 @@ class ChatService {
               title: const Text("Video"),
               onTap: () async {
                 Navigator.pop(context);
-                final xfile =
-                await _picker.pickVideo(source: ImageSource.gallery);
+                final xfile = await _picker.pickVideo(source: ImageSource.gallery);
                 if (xfile != null) {
-                  await _uploader.uploadMediaFile(
-                    File(xfile.path),
-                    typeHint: 'video',
+                  await sendMediaMessage(
+                    file: File(xfile.path),
+                    type: 'video',
                     originalName: xfile.name,
-                    context: context,
                   );
                 }
               },
@@ -312,11 +305,13 @@ class ChatService {
                 final res = await FilePicker.platform.pickFiles();
                 if (res != null && res.files.single.path != null) {
                   final f = File(res.files.single.path!);
-                  await _uploader.uploadMediaFile(
-                    f,
-                    typeHint: 'file',
+                  await sendMediaMessage(
+                    file: f,
+                    type: 'file',
                     originalName: res.files.single.name,
-                    context: context,
+                    extraMeta: {
+                      "extension": res.files.single.extension,
+                    },
                   );
                 }
               },

@@ -5,6 +5,7 @@ import 'package:badges/badges.dart' as badges;
 
 import '../auth/auth_wrapper.dart';
 import '../chat/chat_page.dart';
+import '../chat/encryption_helper.dart';
 import '../widgets/profile_avatar.dart';
 import '../connections/search_invite.dart';
 import '../notifications/notifications_page.dart';
@@ -326,16 +327,29 @@ class _SeeAllConnectionsState extends State<SeeAllConnections> {
                                       );
                                     }
 
-                                    final lastMsg =
-                                    Map<String, dynamic>.from(
-                                        data["lastMessage"]);
-                                    final msgText = lastMsg["text"] ?? "";
+                                    final lastMsg = Map<String, dynamic>.from(data["lastMessage"]);
                                     final senderId = lastMsg["senderId"];
 
+                                    String msgText = "";
+                                    if (lastMsg["type"] == null || lastMsg["type"] == "text") {
+                                      try {
+                                          final helper = EncryptionHelper(chatId);
+                                        msgText = helper.decryptText(lastMsg["text"]);
+                                      } catch (_) {
+                                        msgText = "[Message]";
+                                      }
+                                    } else if (lastMsg["type"] == "image") {
+                                      msgText = "📷 Photo";
+                                    } else if (lastMsg["type"] == "video") {
+                                      msgText = "🎥 Video";
+                                    } else if (lastMsg["type"] == "file") {
+                                      msgText = "📎 ${lastMsg["fileName"] ?? "File"}";
+                                    } else {
+                                      msgText = "[${lastMsg["type"]}]";
+                                    }
+
                                     return Text(
-                                      senderId == currentUid
-                                          ? "You: $msgText"
-                                          : msgText,
+                                      senderId == currentUid ? "You: $msgText" : msgText,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
