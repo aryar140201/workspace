@@ -78,6 +78,11 @@ class _MainHomeState extends State<MainHome> {
   late int _selectedIndex;
   late List<Widget> _pages;
 
+
+  // Gradient colors
+  static const Color _lightStart = Color(0xFF19B2A9);
+  static const Color _lightEnd = Color(0xFFF09A4D);
+
   @override
   void initState() {
     super.initState();
@@ -111,9 +116,9 @@ class _MainHomeState extends State<MainHome> {
       "Chat",
       "Profile"
     ];
-
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      appBar: (_selectedIndex == 0 || _selectedIndex == 3 || _selectedIndex == 4)
+      appBar: (_selectedIndex == 0 || _selectedIndex == 1 || _selectedIndex == 2 || _selectedIndex == 3 || _selectedIndex == 4)
           ? null
           : AppBar(
         backgroundColor: Colors.white,
@@ -131,29 +136,42 @@ class _MainHomeState extends State<MainHome> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         type: BottomNavigationBarType.fixed,
-        selectedItemColor: Colors.black,
-        unselectedItemColor: Colors.grey,
+        backgroundColor: isDark ? const Color(0xFF121212) : Colors.white,
+        selectedItemColor: _lightStart, // ✅ teal for selected
+        unselectedItemColor: isDark ? Colors.white : Colors.black, // ✅ dark/light
+        showUnselectedLabels: true,
+        selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600),
+        unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w400),
         onTap: (index) {
           setState(() => _selectedIndex = index);
         },
         items: [
           const BottomNavigationBarItem(
-              icon: Icon(Icons.home), label: "Dashboard"),
+            icon: Icon(Icons.home), // ❌ no fixed color, Flutter handles it
+            label: "Dashboard",
+          ),
           const BottomNavigationBarItem(
-              icon: Icon(Icons.search), label: "Search"),
+            icon: Icon(Icons.search),
+            label: "Search",
+          ),
           if (widget.userRole == "Freelancer")
             const BottomNavigationBarItem(
-                icon: Icon(Icons.work), label: "My Work")
+              icon: Icon(Icons.work),
+              label: "My Work",
+            )
           else
             const BottomNavigationBarItem(
-                icon: Icon(Icons.add_box), label: "Add"),
+              icon: Icon(Icons.add_box),
+              label: "Add",
+            ),
           const BottomNavigationBarItem(
             icon: Icon(Icons.people),
-            // icon: Icon(Icons.),
             label: "Chat",
           ),
           const BottomNavigationBarItem(
-              icon: Icon(Icons.person), label: "Profile"),
+            icon: Icon(Icons.person),
+            label: "Profile",
+          ),
         ],
       ),
     );

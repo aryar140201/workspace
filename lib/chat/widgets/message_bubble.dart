@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dio/dio.dart';
@@ -28,6 +29,12 @@ class MessageBubble extends StatelessWidget {
   final void Function(Map<String, dynamic> message, String msgId)? onReply;
   final void Function(Map<String, dynamic> message)? onForward;
 
+  // Define colors for the bubbles
+  static const Color myBubbleColor = Color(0xFF399FAA); // Your messages
+  static const Color otherBubbleColor = Color(0xFFFFCC00); // Other user's messages
+  static const Color textColor = Colors.white;
+  static const Color timestampColor = Color(0xFF6B6B6B);
+
   MessageBubble({
     super.key,
     required this.id,
@@ -51,7 +58,7 @@ class MessageBubble extends StatelessWidget {
     _tapPosition = details.globalPosition;
   }
 
-  /// ✅ Unified permission request for Android/iOS
+  /// Unified permission request for Android/iOS
   Future<bool> _requestStoragePermission() async {
     if (Platform.isAndroid) {
       if (await Permission.photos.isGranted ||
@@ -81,7 +88,7 @@ class MessageBubble extends StatelessWidget {
     return false;
   }
 
-  /// ✅ Save media to gallery or downloads
+  /// Save media to gallery or downloads
   Future<void> _saveMedia(BuildContext context, String fileUrl, String fileName,
       String type) async {
     bool hasPermission = await _requestStoragePermission();
@@ -94,7 +101,7 @@ class MessageBubble extends StatelessWidget {
 
     try {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("⬇️ Downloading...")),
+        const SnackBar(content: Text("⬇Downloading...")),
       );
 
       bool? success;
@@ -122,18 +129,18 @@ class MessageBubble extends StatelessWidget {
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("❌ Failed to save file")),
+          const SnackBar(content: Text("Failed to save file")),
         );
       }
     } catch (e) {
       debugPrint("Error saving media: $e");
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("⚠️ Error: $e")),
+        SnackBar(content: Text("Error: $e")),
       );
     }
   }
 
-  /// ✅ WhatsApp-style context menu
+  /// WhatsApp-style context menu
   void _showContextMenu(BuildContext context) async {
     final RenderBox overlay =
     Overlay
@@ -230,7 +237,7 @@ class MessageBubble extends StatelessWidget {
     }
   }
 
-  /// 🔹 Helper for consistent style
+  /// Helper for consistent style
   PopupMenuItem<String> _menuItem(String value,
       String label,
       IconData icon, {
@@ -262,6 +269,7 @@ class MessageBubble extends StatelessWidget {
 
   void _showDeleteDialog(BuildContext context) {
     final isMine = message["senderId"] == currentUid;
+    final Color primaryActionColor = MessageBubble.myBubbleColor;
 
     showDialog(
       context: context,
@@ -275,8 +283,8 @@ class MessageBubble extends StatelessWidget {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text(
-                  "Cancel", style: TextStyle(color: Colors.blueAccent)
+                child: Text(
+                    "Cancel", style: TextStyle(color: primaryActionColor)
                 ),
               ),
               TextButton(
@@ -284,8 +292,8 @@ class MessageBubble extends StatelessWidget {
                   Navigator.pop(context);
                   onDelete(id); // delete only for me
                 },
-                child: const Text(
-                  "Delete for me", style: TextStyle(color: Colors.blueAccent)),
+                child: Text(
+                    "Delete for me", style: TextStyle(color: primaryActionColor)),
               ),
               if (isMine)
                 TextButton(
@@ -308,6 +316,7 @@ class MessageBubble extends StatelessWidget {
     final createdAt = (message['createdAt'] as dynamic)?.toDate();
     final deliveredBy = Map<String, dynamic>.from(message['deliveredBy'] ?? {});
     final readBy = Map<String, dynamic>.from(message['readBy'] ?? {});
+    final Color primaryActionColor = MessageBubble.myBubbleColor;
 
     String _formatTS(DateTime? t) {
       if (t == null) return "—";
@@ -341,13 +350,15 @@ class MessageBubble extends StatelessWidget {
                   "Message Info",
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
-                const Divider(height: 20, color: Colors.blueAccent),
+                // Use primary color for the divider for theme consistency
+                Divider(height: 20, color: primaryActionColor.withOpacity(0.6)),
 
                 // ✅ Read
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.done_all, color: Colors.blueAccent, size: 20),
+                    // Use primary color for the read icon
+                    Icon(Icons.done_all, color: primaryActionColor, size: 20),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
@@ -373,6 +384,7 @@ class MessageBubble extends StatelessWidget {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Keep delivered icon grey
                     const Icon(Icons.done_all, color: Colors.grey, size: 20),
                     const SizedBox(width: 10),
                     Expanded(
@@ -399,8 +411,8 @@ class MessageBubble extends StatelessWidget {
                   alignment: Alignment.centerRight,
                   child: TextButton(
                     onPressed: () => Navigator.pop(context),
-                    child: const Text("CLOSE",
-                        style: TextStyle(fontWeight: FontWeight.bold,color: Colors.blueAccent)),
+                    child: Text("CLOSE",
+                        style: TextStyle(fontWeight: FontWeight.bold, color: primaryActionColor)),
                   ),
                 ),
               ],
@@ -419,20 +431,39 @@ class MessageBubble extends StatelessWidget {
     final type = message['type'] ?? 'text';
     final readBy = Map<String, dynamic>.from(message['readBy'] ?? {});
     final deliveredBy = Map<String, dynamic>.from(message['deliveredBy'] ?? {});
-    final replyTo = message["replyTo"];
 
-    // ✅ Deleted placeholder (always keep in timeline)
+    // Determine if the timestamp is 'inside' (text/file) or 'outside' (image/video)
+    final isTimestampOutsideBubble = type == 'image' || type == 'video';
+
+    // --- 1. Ticks and Read Status (Standard Logic) ---
+    IconData tick = Icons.check;
+    Color standardTickColor = isMe ? Colors.white70 : Colors.black54; // Base color inside bubble
+    if (readBy[otherUserId] == true) {
+      tick = Icons.done_all;
+      standardTickColor = Colors.lightBlueAccent;
+    } else if (deliveredBy[otherUserId] == true) {
+      tick = Icons.done_all;
+    }
+
+    // --- 2. Timestamp Color Calculation (The change you requested) ---
+    final Color finalTimestampColor = isTimestampOutsideBubble
+        ? Colors.black // <-- Black color for image/video (outside)
+        : (isMe ? Colors.white70 : MessageBubble.timestampColor); // White/Gray for text/file (inside)
+
+    // Ticks for outside bubble should also be black unless it's a read tick (blue)
+    final Color finalTickColor = isTimestampOutsideBubble
+        ? (readBy[otherUserId] == true ? Colors.lightBlueAccent : Colors.black) // Black, unless blue read tick
+        : standardTickColor; // Use standard color inside the bubble
+
+
+    // ------------------- Deleted Message Placeholder -------------------
     if (message["deletedFor"]?[currentUid] == true ||
         message["deletedForEveryone"] == true ||
         type == "deleted") {
-      // tick icons
-      IconData tick = Icons.check;
-      Color tickColor = Colors.white70;
+      // Deleted message ticks use standard logic, always inside a dark bubble.
+      Color deletedTickColor = Colors.white70;
       if (readBy[otherUserId] == true) {
-        tick = Icons.done_all;
-        tickColor = Colors.lightBlueAccent;
-      } else if (deliveredBy[otherUserId] == true) {
-        tick = Icons.done_all;
+        deletedTickColor = Colors.lightBlueAccent;
       }
 
       return Align(
@@ -459,13 +490,12 @@ class MessageBubble extends StatelessWidget {
               const SizedBox(width: 6),
               if (createdAt != null)
                 Text(
-                  "${createdAt.hour}:${createdAt.minute.toString().padLeft(
-                      2, '0')}",
+                  DateFormat('h:mm a').format(createdAt),
                   style: const TextStyle(color: Colors.white70, fontSize: 11),
                 ),
               if (isMe) ...[
                 const SizedBox(width: 4),
-                Icon(tick, size: 14, color: tickColor),
+                Icon(tick, size: 14, color: deletedTickColor),
               ],
             ],
           ),
@@ -473,18 +503,10 @@ class MessageBubble extends StatelessWidget {
       );
     }
 
-    // ✅ Ticks
-    IconData tick = Icons.check;
-    Color tickColor = Colors.white70;
-    if (readBy[otherUserId] == true) {
-      tick = Icons.done_all;
-      tickColor = Colors.lightBlueAccent;
-    } else if (deliveredBy[otherUserId] == true) {
-      tick = Icons.done_all;
-    }
-
-    // ✅ Content builder
+    // ------------------- Content Builder -------------------
     Widget content;
+    Color contentTextColor = isMe ? MessageBubble.textColor : Colors.black87;
+
     switch (type) {
       case 'image':
         final fileUrl = message['fileUrl'] ?? "";
@@ -508,11 +530,25 @@ class MessageBubble extends StatelessWidget {
           },
           child: Container(
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFF001E60), width: 5),
+              // Using custom colors now
+              color: isMe ? MessageBubble.myBubbleColor.withOpacity(0.85) : MessageBubble.otherBubbleColor.withOpacity(0.85),
+              borderRadius: BorderRadius.only(
+                topLeft: const Radius.circular(18),
+                topRight: const Radius.circular(18),
+                bottomLeft: isMe ? const Radius.circular(18) : Radius.circular(6),
+                bottomRight: isMe ? Radius.circular(6) : const Radius.circular(18),
+              ),
+              border: isSelected
+                  ? Border.all(color: Colors.lightBlueAccent, width: 2)
+                  : null,
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.only(
+                topLeft: const Radius.circular(18),
+                topRight: const Radius.circular(18),
+                bottomLeft: isMe ? const Radius.circular(18) : Radius.circular(6),
+                bottomRight: isMe ? Radius.circular(6) : const Radius.circular(18),
+              ),
               child: Stack(
                 alignment: Alignment.center,
                 children: [
@@ -524,8 +560,21 @@ class MessageBubble extends StatelessWidget {
                       child: const Icon(Icons.image, color: Colors.white70, size: 40),
                     )
                   else
-                    Image.network(fileUrl,
-                        width: 220, height: 180, fit: BoxFit.cover),
+                  // Use CachedNetworkImage for better performance
+                    CachedNetworkImage(
+                      imageUrl: fileUrl,
+                      width: 220,
+                      height: 180,
+                      fit: BoxFit.cover,
+                      placeholder: (_, __) => Container(
+                        color: Colors.black26,
+                        child: const Center(child: Text("Loading...", style: TextStyle(color: Colors.white70))),
+                      ),
+                      errorWidget: (_, __, ___) => Container(
+                        color: Colors.black26,
+                        child: const Center(child: Icon(Icons.broken_image, color: Colors.white70, size: 40)),
+                      ),
+                    ),
 
                   if (uploading)
                     Container(
@@ -535,7 +584,7 @@ class MessageBubble extends StatelessWidget {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          CircularProgressIndicator(value: progress > 0 ? progress : null),
+                          CircularProgressIndicator(value: progress > 0 ? progress : null, color: Colors.white),
                           const SizedBox(height: 8),
                           Text("${(progress * 100).toStringAsFixed(0)}%",
                               style: const TextStyle(color: Colors.white)),
@@ -573,11 +622,24 @@ class MessageBubble extends StatelessWidget {
             width: 220,
             height: 220,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.black26, width: 0.6),
+              color: isMe ? MessageBubble.myBubbleColor.withOpacity(0.85) : MessageBubble.otherBubbleColor.withOpacity(0.85),
+              borderRadius: BorderRadius.only(
+                topLeft: const Radius.circular(18),
+                topRight: const Radius.circular(18),
+                bottomLeft: isMe ? const Radius.circular(18) : Radius.circular(6),
+                bottomRight: isMe ? Radius.circular(6) : const Radius.circular(18),
+              ),
+              border: isSelected
+                  ? Border.all(color: Colors.lightBlueAccent, width: 2)
+                  : null,
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.only(
+                topLeft: const Radius.circular(18),
+                topRight: const Radius.circular(18),
+                bottomLeft: isMe ? const Radius.circular(18) : Radius.circular(6),
+                bottomRight: isMe ? Radius.circular(6) : const Radius.circular(18),
+              ),
               child: Stack(
                 alignment: Alignment.center,
                 children: [
@@ -594,7 +656,7 @@ class MessageBubble extends StatelessWidget {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          CircularProgressIndicator(value: progress > 0 ? progress : null),
+                          CircularProgressIndicator(value: progress > 0 ? progress : null, color: Colors.white),
                           const SizedBox(height: 8),
                           Text("${(progress * 100).toStringAsFixed(0)}%",
                               style: const TextStyle(color: Colors.white)),
@@ -612,43 +674,63 @@ class MessageBubble extends StatelessWidget {
         final fileUrl = message['fileUrl'] ?? "";
         final uploading = message['uploading'] == true;
         final progress = (message['progress'] as double?) ?? 0.0;
+        final filename = message['fileName'] ?? "Document";
 
         content = GestureDetector(
           onTap: () {
             if (fileUrl.isNotEmpty) {
+              // Updated to use the MediaPreviewPage for file handling/download
               Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => MediaPreviewPage(
                     url: fileUrl,
                     type: "file",
-                    fileName: message['fileName'] ?? "document",
+                    fileName: filename,
                   ),
                 ),
+              );
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("File is not uploaded yet.")),
               );
             }
           },
           child: Container(
+            // Set a clear maximum width to prevent the bubble itself from expanding too much
             constraints: const BoxConstraints(maxWidth: 220),
-            padding: const EdgeInsets.all(8),
+            // Use standard bubble padding
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
             decoration: BoxDecoration(
-              color: Colors.black26,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.black26, width: 0.6),
+              color: isMe ? MessageBubble.myBubbleColor : MessageBubble.otherBubbleColor,
+              borderRadius: BorderRadius.only(
+                topLeft: const Radius.circular(18),
+                topRight: const Radius.circular(18),
+                bottomLeft: isMe ? const Radius.circular(18) : Radius.circular(6),
+                bottomRight: isMe ? Radius.circular(6) : const Radius.circular(18),
+              ),
+              border: isSelected
+                  ? Border.all(color: Colors.lightBlueAccent, width: 2)
+                  : null,
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.insert_drive_file, color: Colors.white, size: 28),
+                // File Icon
+                Icon(Icons.insert_drive_file, color: isMe ? Colors.white : Colors.black87, size: 28),
                 const SizedBox(width: 8),
+
+                // Filename text - MUST be wrapped in Expanded to prevent overflow
                 Expanded(
                   child: Text(
-                    message['fileName'] ?? "Document",
-                    style: const TextStyle(color: Colors.white, fontSize: 16),
-                    overflow: TextOverflow.ellipsis,
+                    filename,
+                    style: TextStyle(color: isMe ? Colors.white : Colors.black87, fontSize: 16),
+                    overflow: TextOverflow.ellipsis, // Ensures text doesn't overflow
                     maxLines: 1,
                   ),
                 ),
+
+                // Uploading indicator
                 if (uploading)
                   Padding(
                     padding: const EdgeInsets.only(left: 8),
@@ -658,7 +740,7 @@ class MessageBubble extends StatelessWidget {
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
                         value: progress > 0 ? progress : null,
-                        color: Colors.white,
+                        color: isMe ? Colors.white : Colors.black87,
                       ),
                     ),
                   ),
@@ -668,7 +750,7 @@ class MessageBubble extends StatelessWidget {
         );
         break;
 
-      default:
+      default: // Text content
         final plain = chatService.decryptTextSafe(message['text']);
         content = GestureDetector(
           onTap: () => selectionMode ? onTap() : null,
@@ -683,7 +765,71 @@ class MessageBubble extends StatelessWidget {
         );
     }
 
-    // Bubble wrapper
+    // ------------------- Unified Timestamp Widget (Uses calculated colors) -------------------
+    final timestampWidget = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (createdAt != null)
+          Text(
+            DateFormat('h:mm a').format(createdAt),
+            style: TextStyle(
+              color: finalTimestampColor, // <-- Uses the calculated color
+              fontSize: 11,
+            ),
+          ),
+        if (isMe) ...[
+          const SizedBox(width: 4),
+          Icon(tick, size: 14, color: finalTickColor), // <-- Uses the calculated tick color
+        ],
+      ],
+    );
+
+
+    // ------------------- Final Layout -------------------
+
+    // Text and File messages (Time inside the colored container/wrapper)
+    if (type == "text" || type == "file") {
+      // For text and file (since file has padding matching text)
+      return GestureDetector(
+        onTapDown: _storePosition,
+        onTap: () => selectionMode ? onTap() : null,
+        onLongPress: () {
+          selectionMode ? onTap() : _showContextMenu(context);
+        },
+        child: Align(
+          alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+          child: Container(
+            margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 8), // Standard text padding
+            constraints: const BoxConstraints(maxWidth: 250),
+            decoration: BoxDecoration(
+              color: isMe ? MessageBubble.myBubbleColor : MessageBubble.otherBubbleColor,
+              borderRadius: BorderRadius.only(
+                topLeft: const Radius.circular(18),
+                topRight: const Radius.circular(18),
+                bottomLeft: isMe ? const Radius.circular(18) : Radius.circular(6),
+                bottomRight: isMe ? Radius.circular(6) : const Radius.circular(18),
+              ),
+              border: isSelected
+                  ? Border.all(color: Colors.lightBlueAccent, width: 2)
+                  : null,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                content,
+                const SizedBox(height: 2),
+                // Time is placed here, already aligned and offset by container padding
+                timestampWidget,
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Media/Video messages (Time outside the colored container/wrapper)
     return GestureDetector(
       onTapDown: _storePosition,
       onTap: () => selectionMode ? onTap() : null,
@@ -692,66 +838,27 @@ class MessageBubble extends StatelessWidget {
       },
       child: Align(
         alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-        child: type == "text" // 🔹 only text has bubble
-            ? Container(
-          margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
-          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-          decoration: BoxDecoration(
-            color: isMe ? Colors.blue : Colors.grey.shade600,
-            borderRadius: BorderRadius.only(
-              topLeft: const Radius.circular(18),
-              topRight: const Radius.circular(18),
-              bottomLeft: isMe ? const Radius.circular(18) : Radius.zero,
-              bottomRight: isMe ? Radius.zero : const Radius.circular(18),
-            ),
-            border: isSelected
-                ? Border.all(color: Colors.lightBlueAccent, width: 2)
-                : null,
-          ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
           child: Column(
-            crossAxisAlignment:
-            isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+            // **CRITICAL FIX**: Aligning the whole structure (media + time)
+            crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
+              // 1. Media Content (Image/Video)
               content,
-              const SizedBox(height: 4),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (createdAt != null)
-                    Text(
-                      "${createdAt.hour}:${createdAt.minute.toString().padLeft(2, '0')}",
-                      style: const TextStyle(color: Colors.white70, fontSize: 11),
-                    ),
-                  if (isMe) ...[
-                    const SizedBox(width: 4),
-                    Icon(tick, size: 14, color: tickColor),
-                  ],
-                ],
-              ),
-            ],
-          ),
-        )
-            : Container( // 🔹 Media = NO fat outer bubble
-          margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
-          child: Column(
-            crossAxisAlignment:
-            isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-            children: [
-              content, // image/video/file directly shown
-              const SizedBox(height: 2),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (createdAt != null)
-                    Text(
-                      "${createdAt.hour}:${createdAt.minute.toString().padLeft(2, '0')}",
-                      style: const TextStyle(color: Colors.black54, fontSize: 11),
-                    ),
-                  if (isMe) ...[
-                    const SizedBox(width: 4),
-                    Icon(tick, size: 14, color: Colors.lightBlueAccent),
-                  ],
-                ],
+
+              // 2. Timestamp (Needs padding to align with the corner)
+              Padding(
+                padding: EdgeInsets.only(
+                  top: 2,
+                  bottom: 0,
+                  // Add 12px padding to the timestamp to visually offset it
+                  // from the edge, matching the look of the text bubble padding.
+                  right: isMe ? 12 : 0,
+                  left: isMe ? 0 : 12,
+                ),
+                child: timestampWidget, // Now using the reusable timestamp with its black color
               ),
             ],
           ),

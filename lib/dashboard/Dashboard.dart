@@ -20,7 +20,6 @@ class Dashboard extends StatefulWidget {
     this.onNavigate,
   });
 
-
   @override
   State<Dashboard> createState() => _DashboardState();
 }
@@ -37,10 +36,9 @@ class _DashboardState extends State<Dashboard> {
   static const Color lightGreen = Color(0xFF00936F);
   static const Color redError = Color(0xFFEF5350);
   static const Color goldPending = Color(0xFFFFC107);
-  static const Color primaryCardColor = Color(0xFFE0F2F1); // Lighter background for cards
-  static const double horizontalPadding = 15.0; // Define consistent padding value
+  static const double horizontalPadding = 15.0;
 
-  // NEW: A map for consistent status colors
+  // Status color mapping
   final Map<String, Color> statusColors = {
     "Pending": Colors.orangeAccent,
     "In Progress": Colors.blueAccent,
@@ -49,15 +47,10 @@ class _DashboardState extends State<Dashboard> {
     "Cancelled": Colors.grey,
     "Paid": Colors.green,
     "Completed": Colors.lightGreen,
-    // Add more statuses as needed with their desired colors
   };
 
-  // Function to handle navigation tap and update the selected index
   void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-    // Notify parent (AuthWrapper) to change its displayed tab
+    setState(() => _selectedIndex = index);
     widget.onNavigate?.call(index);
   }
 
@@ -66,67 +59,37 @@ class _DashboardState extends State<Dashboard> {
     final currentUid = currentUser.uid;
 
     final pages = [
-      _buildHomePage(context, currentUid), // 0: Home (Dashboard)
-      MyWorksPage(userRole: widget.userRole, uid: currentUid), // 1: My Works
-      SeeAllConnections(userRole: widget.userRole), // 2: Connections
-      const ProfilePage(), // 3: Profile
+      _buildHomePage(context, currentUid),
+      MyWorksPage(userRole: widget.userRole, uid: currentUid),
+      SeeAllConnections(userRole: widget.userRole),
+      const ProfilePage(),
     ];
 
     return Scaffold(
       body: pages[_selectedIndex],
       backgroundColor: Colors.white,
-
-      // ADDED: Bottom Navigation Bar
-      // bottomNavigationBar: BottomNavigationBar(
-      //   items: const <BottomNavigationBarItem>[
-      //     BottomNavigationBarItem(
-      //       icon: Icon(Icons.dashboard),
-      //       label: 'Home',
-      //     ),
-      //     BottomNavigationBarItem(
-      //       icon: Icon(Icons.work),
-      //       label: 'My Works',
-      //     ),
-      //     BottomNavigationBarItem(
-      //       icon: Icon(Icons.people),
-      //       label: 'Connections',
-      //     ),
-      //     BottomNavigationBarItem(
-      //       icon: Icon(Icons.person),
-      //       label: 'Profile',
-      //     ),
-      //   ],
-      //   currentIndex: _selectedIndex,
-      //   selectedItemColor: darkTeal,
-      //   unselectedItemColor: Colors.grey,
-      //   onTap: _onItemTapped, // Call the function to update state
-      //   type: BottomNavigationBarType.fixed, // Ensures colors are static
-      // ),
     );
   }
 
-  /// 🔹 Home Page (Dashboard content) - FIX: Update Activity Log function call
+  /// 🔹 Home Page
   Widget _buildHomePage(BuildContext context, String currentUid) {
     return Column(
       children: [
-        // 🔹 Clean Header (padding maintained)
+        // Header
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(horizontalPadding, 45, horizontalPadding, 16),
+          padding: const EdgeInsets.fromLTRB(
+              horizontalPadding, 45, horizontalPadding, 16),
           decoration: const BoxDecoration(
             color: Colors.white,
             boxShadow: [
               BoxShadow(
-                color: Colors.black12,
-                blurRadius: 6,
-                offset: Offset(0, 3),
-              ),
+                  color: Colors.black12, blurRadius: 6, offset: Offset(0, 3)),
             ],
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // FREENIA Logo/Title
               const Text(
                 "Freelenia",
                 style: TextStyle(
@@ -136,18 +99,15 @@ class _DashboardState extends State<Dashboard> {
                   letterSpacing: 0.5,
                 ),
               ),
-              // Search & Notification Icons
               Row(
                 children: [
                   IconButton(
                     icon: const Icon(Icons.search, color: darkTeal, size: 26),
                     onPressed: () {
-                      // Uses AuthWrapper for switching to the search tab (index 1)
                       Navigator.pushReplacement(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => const AuthWrapper(initialIndex: 1),
-                        ),
+                            builder: (_) => const AuthWrapper(initialIndex: 1)),
                       );
                     },
                   ),
@@ -158,30 +118,31 @@ class _DashboardState extends State<Dashboard> {
                         .where("read", isEqualTo: false)
                         .snapshots(),
                     builder: (context, snapshot) {
-                      int unreadCount =
-                      snapshot.hasData ? snapshot.data!.docs.length : 0;
-
+                      int unreadCount = snapshot.hasData ? snapshot.data!.docs
+                          .length : 0;
                       return IconButton(
                         icon: badges.Badge(
-                          position: badges.BadgePosition.topEnd(top: -4, end: -4),
+                          position: badges.BadgePosition.topEnd(
+                              top: -4, end: -4),
                           showBadge: unreadCount > 0,
                           badgeContent: Text(
                             unreadCount.toString(),
-                            style: const TextStyle(color: Colors.white, fontSize: 10),
+                            style: const TextStyle(
+                                color: Colors.white, fontSize: 10),
                           ),
                           badgeStyle: const badges.BadgeStyle(
                             badgeColor: redError,
                             padding: EdgeInsets.all(5),
                             elevation: 0,
                           ),
-                          child: const Icon(Icons.notifications_none, color: darkTeal, size: 26),
+                          child: const Icon(Icons.notifications_none,
+                              color: darkTeal, size: 26),
                         ),
                         onPressed: () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => const NotificationsPage(),
-                            ),
+                                builder: (_) => const NotificationsPage()),
                           );
                         },
                       );
@@ -193,19 +154,19 @@ class _DashboardState extends State<Dashboard> {
           ),
         ),
 
-        // 🔹 Body Content - FIX: Remove horizontal padding here
+        // Body Content
         Expanded(
           child: Container(
             color: const Color(0xFFF9FAFA),
             child: SingleChildScrollView(
-              // FIX: Set horizontal padding to 0 and manage it per widget below
               padding: const EdgeInsets.fromLTRB(0, 20, 0, 30),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // --- TEAM & CONNECTIONS SECTION ---
-                  Padding( // Re-add padding for this section
-                    padding: const EdgeInsets.symmetric(horizontal: horizontalPadding),
+                  // --- TEAM & CONNECTIONS ---
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: horizontalPadding),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -219,19 +180,7 @@ class _DashboardState extends State<Dashboard> {
                         ),
                         GestureDetector(
                           onTap: () {
-                            // 🎯 UPDATED LOGIC: Use AuthWrapper to switch to Connections (index 2)
-                            if (widget.onNavigate != null) {
-                              // If Dashboard is used within AuthWrapper, use the callback
-                              widget.onNavigate!(2); // 2 is the index for Connections
-                            } else {
-                              // Fallback: Use Navigator.pushReplacement to open AuthWrapper on the Connections tab.
-                              Navigator.pushReplacement(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const AuthWrapper(initialIndex: 3), // Index 2 for Connections
-                                ),
-                              );
-                            }
+                            widget.onNavigate?.call(2);
                           },
                           child: const Row(
                             children: [
@@ -244,7 +193,8 @@ class _DashboardState extends State<Dashboard> {
                                 ),
                               ),
                               SizedBox(width: 4),
-                              Icon(Icons.arrow_forward, color: darkTeal, size: 16),
+                              Icon(Icons.arrow_forward, color: darkTeal,
+                                  size: 16),
                             ],
                           ),
                         ),
@@ -252,68 +202,120 @@ class _DashboardState extends State<Dashboard> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  // The connections list manages its own horizontal scroll/padding
                   _buildConnectionsList(currentUid),
 
                   const SizedBox(height: 30),
 
-                  // --- KEY METRICS (WORKLOAD) ---
-                  Padding( // Re-add padding for this title
-                    padding: const EdgeInsets.symmetric(horizontal: horizontalPadding),
-                    child: const Text(
-                      "Workload",
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black87,
-                        fontSize: 16,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-
-                  Padding( // Re-add padding for the GridView
-                    padding: const EdgeInsets.symmetric(horizontal: horizontalPadding),
+                  // --- Responsive Workload + Financials Section ---
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: horizontalPadding),
                     child: FutureBuilder<Map<String, int>>(
                       future: _fetchStats(currentUid),
                       builder: (context, snap) {
                         if (!snap.hasData) {
                           return const Padding(
                             padding: EdgeInsets.all(20),
-                            child: Center(
-                              child: CircularProgressIndicator(color: darkTeal),
-                            ),
+                            child: Center(child: CircularProgressIndicator(
+                                color: darkTeal)),
                           );
                         }
 
                         var stats = snap.data!;
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _buildMetricsGrid(context, currentUid, stats, type: 'workload'),
-                            const SizedBox(height: 30),
+                        final screenWidth = MediaQuery
+                            .of(context)
+                            .size
+                            .width;
+                        final isTabletOrLarger = screenWidth >=
+                            600; // ✅ side-by-side for tablet/desktop
 
-                            // --- FINANCIALS ---
-                            const Text(
-                              "Financials",
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                color: Colors.black87,
-                                fontSize: 16,
+                        if (isTabletOrLarger) {
+                          // 💻 SIDE-BY-SIDE (for all tablets, including S9 FE portrait or landscape)
+                          return Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      "Workload",
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.black87,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    _buildMetricsGrid(
+                                        context, currentUid, stats,
+                                        type: 'workload'),
+                                  ],
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 10),
-                            _buildMetricsGrid(context, currentUid, stats, type: 'financials'),
-                          ],
-                        );
+                              const SizedBox(width: 25),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      "Financials",
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.black87,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    _buildMetricsGrid(
+                                        context, currentUid, stats,
+                                        type: 'financials'),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          );
+                        } else {
+                          // 📱 STACKED (phones)
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                "Workload",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.black87,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              _buildMetricsGrid(
+                                  context, currentUid, stats, type: 'workload'),
+                              const SizedBox(height: 30),
+                              const Text(
+                                "Financials",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.black87,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              _buildMetricsGrid(context, currentUid, stats,
+                                  type: 'financials'),
+                            ],
+                          );
+                        }
                       },
                     ),
                   ),
 
                   const SizedBox(height: 30),
 
-                  // --- ACTIVITY LOG TITLE (Overall) ---
+                  // --- ACTIVITY LOG ---
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: horizontalPadding),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: horizontalPadding),
                     child: const Text(
                       "Activity Log",
                       style: TextStyle(
@@ -324,19 +326,17 @@ class _DashboardState extends State<Dashboard> {
                     ),
                   ),
                   const SizedBox(height: 10),
-
-                  // 🎯 FIX: Call the correct function for dual activity logs
                   _buildActivityLogs(currentUid),
                 ],
               ),
             ),
           ),
-        )
+        ),
       ],
     );
   }
 
-  /// 🔹 REFACTORED: Connections widget (using original logic)
+  /// 🔹 Connections List (fixed overflow)
   Widget _buildConnectionsList(String currentUid) {
     return StreamBuilder<QuerySnapshot>(
       stream: _firestore
@@ -351,16 +351,19 @@ class _DashboardState extends State<Dashboard> {
           .snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator(color: darkTeal));
+          return const Center(
+              child: CircularProgressIndicator(color: darkTeal));
         }
 
         var connections = snapshot.data!.docs;
         if (connections.isEmpty) {
           return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: horizontalPadding), // Added horizontal padding
+            padding: const EdgeInsets.symmetric(
+                vertical: 20, horizontal: horizontalPadding),
             child: Text(
               "No connections yet.",
-              style: Theme.of(context)
+              style: Theme
+                  .of(context)
                   .textTheme
                   .bodyMedium
                   ?.copyWith(color: Colors.black54),
@@ -371,18 +374,16 @@ class _DashboardState extends State<Dashboard> {
         var latestConnections = connections.take(5).toList();
 
         return SizedBox(
-          height: 80,
+          height: 88, // ✅ increased to avoid RenderFlex overflow
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
-            // Add padding to the start of the list
             padding: const EdgeInsets.only(left: horizontalPadding),
             itemCount: latestConnections.length,
             itemBuilder: (context, index) {
-              var data =
-              latestConnections[index].data() as Map<String, dynamic>;
-              String otherUserId = (data["userA"] == currentUid)
-                  ? data["userB"]
-                  : data["userA"];
+              var data = latestConnections[index].data() as Map<String,
+                  dynamic>;
+              String otherUserId =
+              (data["userA"] == currentUid) ? data["userB"] : data["userA"];
 
               return FutureBuilder<DocumentSnapshot>(
                 future: _firestore.collection("users").doc(otherUserId).get(),
@@ -396,8 +397,7 @@ class _DashboardState extends State<Dashboard> {
                     );
                   }
 
-                  var userData =
-                  userSnap.data!.data() as Map<String, dynamic>;
+                  var userData = userSnap.data!.data() as Map<String, dynamic>;
 
                   return _buildConnectionAvatar(
                     context,
@@ -422,22 +422,24 @@ class _DashboardState extends State<Dashboard> {
     );
   }
 
-  /// 🔹 Helper for Connection Avatar (New Clean Style)
-  Widget _buildConnectionAvatar(
-      BuildContext context, {
-        required String name,
-        String? profilePicUrl,
-        required VoidCallback onTap,
-        bool isPlaceholder = false,
-      }) {
-    String initials = name.isNotEmpty ? name.split(' ').map((s) => s[0]).join() : '?';
+  /// 🔹 Connection Avatar (overflow-safe)
+  Widget _buildConnectionAvatar(BuildContext context, {
+    required String name,
+    String? profilePicUrl,
+    required VoidCallback onTap,
+    bool isPlaceholder = false,
+  }) {
+    String initials = name.isNotEmpty
+        ? name.split(' ').map((s) => s[0]).join()
+        : '?';
 
     return GestureDetector(
       onTap: onTap,
       child: Container(
         width: 70,
-        margin: const EdgeInsets.only(right: 15),
+        margin: const EdgeInsets.only(right: 20),
         child: Column(
+          mainAxisSize: MainAxisSize.min, // ✅ prevent overflow
           children: [
             Container(
               decoration: BoxDecoration(
@@ -445,12 +447,14 @@ class _DashboardState extends State<Dashboard> {
                 border: Border.all(color: darkTeal.withOpacity(0.5), width: 1),
               ),
               child: CircleAvatar(
-                radius: 28,
-                backgroundColor: isPlaceholder ? Colors.grey[300] : darkTeal.withOpacity(0.1),
-                backgroundImage: profilePicUrl != null && profilePicUrl.isNotEmpty
+                radius: 26, // ✅ reduced from 28
+                backgroundColor: isPlaceholder ? Colors.grey[300] : darkTeal
+                    .withOpacity(0.1),
+                backgroundImage: profilePicUrl != null &&
+                    profilePicUrl.isNotEmpty
                     ? NetworkImage(profilePicUrl)
                     : null,
-                child: profilePicUrl == null || profilePicUrl.isEmpty
+                child: (profilePicUrl == null || profilePicUrl.isEmpty)
                     ? Text(
                   initials,
                   style: const TextStyle(
@@ -462,13 +466,14 @@ class _DashboardState extends State<Dashboard> {
                     : null,
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 4),
             Text(
               name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
-              style: Theme.of(context)
+              style: Theme
+                  .of(context)
                   .textTheme
                   .bodySmall
                   ?.copyWith(color: Colors.black87, fontSize: 12),
@@ -479,9 +484,8 @@ class _DashboardState extends State<Dashboard> {
     );
   }
 
-  /// 🔹 Helper for Metrics Grid (New Two-Section Style) - Logic unchanged
-  Widget _buildMetricsGrid(
-      BuildContext context,
+  /// 🔹 Metrics Grid
+  Widget _buildMetricsGrid(BuildContext context,
       String currentUid,
       Map<String, int> stats, {
         required String type,
@@ -496,12 +500,14 @@ class _DashboardState extends State<Dashboard> {
           "subtitle": "Assigned By Me",
           "icon": Icons.arrow_circle_up,
           "color": accentBlue.withOpacity(0.8),
-          "onTap": () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => WorksListPage(userRole: "Company", uid: currentUid),
-            ),
-          ),
+          "onTap": () =>
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      WorksListPage(userRole: "Company", uid: currentUid),
+                ),
+              ),
         },
         {
           "label": "Team Assignments",
@@ -509,12 +515,14 @@ class _DashboardState extends State<Dashboard> {
           "subtitle": "Assigned To Me",
           "icon": Icons.arrow_circle_down,
           "color": lightGreen.withOpacity(0.8),
-          "onTap": () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => MyWorksPage(userRole: widget.userRole, uid: currentUid),
-            ),
-          ),
+          "onTap": () =>
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      MyWorksPage(userRole: widget.userRole, uid: currentUid),
+                ),
+              ),
         },
       ];
     } else if (type == 'financials') {
@@ -526,7 +534,18 @@ class _DashboardState extends State<Dashboard> {
           "isCurrency": true,
           "icon": Icons.account_balance_wallet_outlined,
           "color": redError.withOpacity(0.8),
-          "onTap": () {},
+          "onTap": () =>
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      WorksListPage(
+                        userRole: "Company",
+                        uid: currentUid,
+                        initialStatusFilter: "Completed", // ✅ only show completed works
+                      ),
+                ),
+              ),
         },
         {
           "label": "Money In",
@@ -535,7 +554,18 @@ class _DashboardState extends State<Dashboard> {
           "isCurrency": true,
           "icon": Icons.attach_money,
           "color": darkTeal.withOpacity(0.8),
-          "onTap": () {},
+          "onTap": () =>
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      MyWorksPage(
+                        userRole: widget.userRole,
+                        uid: currentUid,
+                        initialStatusFilter: "Completed", // ✅ only show completed works
+                      ),
+                ),
+              ),
         },
       ];
     }
@@ -569,27 +599,70 @@ class _DashboardState extends State<Dashboard> {
     );
   }
 
-  /// 🔹 REFACTORED: Build Stat Card (Styled for the new UI) - Logic unchanged
-  Widget _buildStyledStatCard(
-      BuildContext context, {
-        required String label,
-        required String subtitle,
-        required int count,
-        required Color color,
-        required IconData icon,
-        bool isCurrency = false,
-        required VoidCallback onTap,
-      }) {
-    final valueText = isCurrency ? "₹ ${count.toString()}" : count.toString();
+  /// 🔹 Responsive & Orientation-Aware Stat Card
+  Widget _buildStyledStatCard(BuildContext context, {
+    required String label,
+    required String subtitle,
+    required int count,
+    required Color color,
+    required IconData icon,
+    bool isCurrency = false,
+    required VoidCallback onTap,
+  }) {
+    final valueText = isCurrency ? "₹ $count" : count.toString();
+    final size = MediaQuery
+        .of(context)
+        .size;
+    final orientation = MediaQuery
+        .of(context)
+        .orientation;
+
+    final isTablet = size.width >= 400 && size.width < 900;
+    final isWideScreen = size.width >= 1100;
+    final isTabletPortrait = isTablet && orientation == Orientation.portrait;
+
+    // Dynamic scaling
+    final double fontSizeValue = isWideScreen
+        ? 18
+        : isTabletPortrait
+        ? 24
+        : 26;
+    final double fontSizeLabel = isWideScreen
+        ? 11
+        : isTabletPortrait
+        ? 12
+        : 12;
+    final double fontSizeSubtitle = isWideScreen
+        ? 10
+        : isTabletPortrait
+        ? 10
+        : 10;
+    final double iconSize = isWideScreen
+        ? 16
+        : isTabletPortrait
+        ? 18
+        : 18;
+    final double padding = isWideScreen
+        ? 10
+        : isTabletPortrait
+        ? 13
+        : 14;
 
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(padding),
         decoration: BoxDecoration(
           color: color.withOpacity(0.1),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: color.withOpacity(0.3), width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: color.withOpacity(0.06),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -598,15 +671,19 @@ class _DashboardState extends State<Dashboard> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: color,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: color,
+                      fontWeight: FontWeight.w600,
+                      fontSize: fontSizeLabel,
+                    ),
                   ),
                 ),
-                Icon(icon, color: color, size: 20),
+                Icon(icon, color: color, size: iconSize),
               ],
             ),
             const Spacer(),
@@ -615,15 +692,18 @@ class _DashboardState extends State<Dashboard> {
               style: TextStyle(
                 color: color,
                 fontWeight: FontWeight.w900,
-                fontSize: 28,
+                fontSize: fontSizeValue,
+                height: 1.1,
               ),
             ),
             Text(
               subtitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: Colors.black54,
                 fontWeight: FontWeight.w500,
-                fontSize: 12,
+                fontSize: fontSizeSubtitle,
               ),
             ),
           ],
@@ -649,7 +729,8 @@ class _DashboardState extends State<Dashboard> {
               .snapshots(),
           builder: (context, assignedToSnapshot) {
             if (!assignedBySnapshot.hasData || !assignedToSnapshot.hasData) {
-              return const Center(child: CircularProgressIndicator(color: darkTeal));
+              return const Center(
+                  child: CircularProgressIndicator(color: darkTeal));
             }
 
             var tasksBy = assignedBySnapshot.data!.docs;
@@ -667,10 +748,16 @@ class _DashboardState extends State<Dashboard> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: horizontalPadding),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: horizontalPadding),
                   child: Text(
                     "Assigned By Me",
-                    style: Theme.of(context).textTheme.titleSmall!.copyWith(fontWeight: FontWeight.bold, color: Colors.black87),
+                    style: Theme
+                        .of(context)
+                        .textTheme
+                        .titleSmall!
+                        .copyWith(
+                        fontWeight: FontWeight.bold, color: Colors.black87),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -678,27 +765,35 @@ class _DashboardState extends State<Dashboard> {
                 const SizedBox(height: 20),
 
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: horizontalPadding),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: horizontalPadding),
                   child: Text(
                     "Assigned To Me",
-                    style: Theme.of(context).textTheme.titleSmall!.copyWith(fontWeight: FontWeight.bold, color: Colors.black87),
+                    style: Theme
+                        .of(context)
+                        .textTheme
+                        .titleSmall!
+                        .copyWith(
+                        fontWeight: FontWeight.bold, color: Colors.black87),
                   ),
                 ),
                 const SizedBox(height: 8),
                 _buildStatusScrollList(countsTo, currentUid, "assignedTo"),
                 if (totalFailedCount > 0)
                   Padding(
-                    padding: const EdgeInsets.only(top: 20, left: horizontalPadding),
+                    padding: const EdgeInsets.only(
+                        top: 20, left: horizontalPadding),
                     child: GestureDetector(
                       onTap: () {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => WorksListPage(
-                              userRole: widget.userRole,
-                              uid: currentUid,
-                              initialStatusFilter: "Failed",
-                            ),
+                            builder: (_) =>
+                                WorksListPage(
+                                  userRole: widget.userRole,
+                                  uid: currentUid,
+                                  initialStatusFilter: "Failed",
+                                ),
                           ),
                         );
                       },
@@ -734,7 +829,8 @@ class _DashboardState extends State<Dashboard> {
     return counts;
   }
 
-  Widget _buildStatusScrollList(Map<String, int> statusCounts, String currentUid, String assignmentType) {
+  Widget _buildStatusScrollList(Map<String, int> statusCounts,
+      String currentUid, String assignmentType) {
     List<String> sortedStatuses = statusCounts.keys.toList()
       ..sort((a, b) => _getStatusOrder(a).compareTo(_getStatusOrder(b)));
 
@@ -753,13 +849,14 @@ class _DashboardState extends State<Dashboard> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => WorksListPage(
-                      userRole: widget.userRole,
-                      uid: currentUid,
-                      initialStatusFilter: status,
-                      // Pass assignmentType to the filter page if it supports it
-                      assignmentTypeFilter: assignmentType,
-                    ),
+                    builder: (_) =>
+                        WorksListPage(
+                          userRole: widget.userRole,
+                          uid: currentUid,
+                          initialStatusFilter: status,
+                          // Pass assignmentType to the filter page if it supports it
+                          assignmentTypeFilter: assignmentType,
+                        ),
                   ),
                 );
               },
@@ -773,21 +870,29 @@ class _DashboardState extends State<Dashboard> {
   // Helper to define a sorting order for statuses (optional, for consistent display)
   int _getStatusOrder(String status) {
     switch (status) {
-      case "Failed": return 0;
-      case "Pending": return 1;
-      case "In Progress": return 2;
-      case "Rework": return 3;
-      case "Cancelled": return 4;
-      case "Paid": return 5;
-      case "Completed": return 6;
-      default: return 99;
+      case "Failed":
+        return 0;
+      case "Pending":
+        return 1;
+      case "In Progress":
+        return 2;
+      case "Rework":
+        return 3;
+      case "Cancelled":
+        return 4;
+      case "Paid":
+        return 5;
+      case "Completed":
+        return 6;
+      default:
+        return 99;
     }
   }
 
 
   /// 🔹 Helper for Status Pills (More Attractive Design)
-  Widget _buildStatusPill(
-      String status, int count, Color color, {required VoidCallback onTap}) {
+  Widget _buildStatusPill(String status, int count, Color color,
+      {required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -843,30 +948,50 @@ class _DashboardState extends State<Dashboard> {
 
   // --- Original unchanged logic ---
 
-  /// 🔹 Fetch statistics (original unchanged logic)
+  /// 🔹 Fetch statistics — compute total payment amounts from completed works
   Future<Map<String, int>> _fetchStats(String uid) async {
+    double totalMoneyOut = 0;
+    double totalMoneyIn = 0;
+
+    // ✅ Money Out: sum of all completed tasks assigned by current user
     var assignedByMe = await _firestore
         .collection("tasks")
         .where("assignedBy", isEqualTo: uid)
+        .where("status", isEqualTo: "Completed")
         .get();
+
+    for (var doc in assignedByMe.docs) {
+      var data = doc.data();
+      totalMoneyOut += (data["price"] ?? 0).toDouble(); // ✅ use 'price'
+    }
+
+    // ✅ Money In: sum of all completed tasks assigned to current user
     var assignedToMe = await _firestore
         .collection("tasks")
         .where("assignedTo", isEqualTo: uid)
+        .where("status", isEqualTo: "Completed")
         .get();
-    var paymentsToPay = await _firestore
-        .collection("payments")
-        .where("fromUser", isEqualTo: uid)
+
+    for (var doc in assignedToMe.docs) {
+      var data = doc.data();
+      totalMoneyIn += (data["price"] ?? 0).toDouble(); // ✅ use 'price'
+    }
+
+    // ✅ Also keep counts for workload
+    var allAssignedByMe = await _firestore
+        .collection("tasks")
+        .where("assignedBy", isEqualTo: uid)
         .get();
-    var paymentsReceived = await _firestore
-        .collection("payments")
-        .where("toUser", isEqualTo: uid)
+    var allAssignedToMe = await _firestore
+        .collection("tasks")
+        .where("assignedTo", isEqualTo: uid)
         .get();
 
     return {
-      "assignedByMe": assignedByMe.docs.length,
-      "assignedToMe": assignedToMe.docs.length,
-      "paymentsToPay": paymentsToPay.docs.length,
-      "paymentsReceived": paymentsReceived.docs.length,
+      "assignedByMe": allAssignedByMe.docs.length,
+      "assignedToMe": allAssignedToMe.docs.length,
+      "paymentsToPay": totalMoneyOut.round(), // total ₹ for Money Out
+      "paymentsReceived": totalMoneyIn.round(), // total ₹ for Money In
     };
   }
 }

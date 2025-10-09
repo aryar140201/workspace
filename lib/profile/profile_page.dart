@@ -56,6 +56,12 @@ class _ProfilePageState extends State<ProfilePage> {
 
   bool _isLoading = true;
 
+  // Colors
+  static const Color _gradientStartColor = Color(0xFF19B2A9);
+  static const Color _gradientEndColor = Color(0xFFF09A4D);
+  static const Color _iconColor = Color(0xFFFFFFFF);
+  static const Color _primaryTextColor = Color(0xFF2C3E50);
+
   @override
   void initState() {
     super.initState();
@@ -100,18 +106,7 @@ class _ProfilePageState extends State<ProfilePage> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      // appBar: AppBar(
-      //   title: const Text("Profile"),
-      //   backgroundColor: Colors.deepPurple,
-      //   actions: [
-      //     // 🔹 Small avatar on AppBar
-      //     Padding(
-      //       padding: const EdgeInsets.only(right: 12),
-      //       child: ProfileAvatar(imageUrl: _profileUrl, radius: 18),
-      //     ),
-      //   ],
-      // ),
-      backgroundColor: Colors.blue.shade50,
+      backgroundColor: isDark ? Colors.black87 : Colors.white,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Column(
@@ -119,14 +114,14 @@ class _ProfilePageState extends State<ProfilePage> {
           // 🔹 Gradient header with large avatar
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.only(top: 60, bottom: 0),
+            padding: const EdgeInsets.only(top: 60, bottom: 10),
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: isDark
-                    ? [Colors.grey.shade900, Colors.black]
-                    : [const Color(0xFF1976D2), const Color(0xFF64B5F6)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+                    ? [_gradientStartColor, _gradientEndColor]
+                    : [_gradientStartColor, _gradientEndColor]
+                // begin: Alignment.topLeft,
+                // end: Alignment.bottomRight,
               ),
               borderRadius: const BorderRadius.vertical(
                   bottom: Radius.circular(30)),

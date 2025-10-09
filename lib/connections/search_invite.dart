@@ -19,6 +19,12 @@ class _SearchAndInviteState extends State<SearchAndInvite> {
   List<Map<String, dynamic>> _recommendedUsers = [];
   bool _permissionDenied = false;
 
+  // Colors
+  static const Color _gradientStartColor = Color(0xFF19B2A9);
+  static const Color _gradientEndColor = Color(0xFFF09A4D);
+  static const Color _iconColor = Color(0xFFFFFFFF);
+  static const Color _primaryTextColor = Color(0xFF2C3E50);
+
   final currentUserId = FirebaseAuth.instance.currentUser!.uid;
 
   /// 🔹 Manual Search
@@ -212,8 +218,6 @@ class _SearchAndInviteState extends State<SearchAndInvite> {
       }
     });
   }
-
-  /// ✅ Show Accept/Reject Dialog
   /// ✅ Show Accept/Reject Dialog
   void _showInvitationDialog(String notifId, Map<String, dynamic> data) async {
     final String? fromUser = data["fromUser"] as String?;
@@ -280,37 +284,76 @@ class _SearchAndInviteState extends State<SearchAndInvite> {
     final textColor = Theme.of(context).colorScheme.onSurface;
 
     return Scaffold(
-      backgroundColor: Colors.blue.shade50,
+      backgroundColor: isDark ? Colors.black87 : Colors.white,
       body: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.only(bottom: 16),
         child: Column(
           children: [
-            // 🔹 Search Bar
+            // ✅ Header (full top cover)
             Container(
-              decoration: BoxDecoration(
-                // color: surfaceColor,
-                // color: Colors.white.withOpacity(0.15),
+              width: double.infinity,
+              padding: const EdgeInsets.only(top: 105, bottom: 55, left: 20, right: 20),
+              margin: const EdgeInsets.only(bottom: 20),
+              decoration: const BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Color(0xFF19B2A9), Color(0xFFF09A4D)],
+                  colors: [_gradientStartColor, _gradientEndColor],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
+                borderRadius: BorderRadius.only(
+                  bottomLeft: Radius.circular(25),
+                  bottomRight: Radius.circular(25),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 8,
+                    offset: Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Center(
+                child: Text(
+                  "Search And Invite",
+                  style: TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.black87 : Colors.white,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+            ),
+
+            // 🔹 Search Bar
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
                 borderRadius: BorderRadius.circular(30),
+                boxShadow: [
+                  BoxShadow(
+                    color: isDark ? Colors.black12 : Colors.grey.withOpacity(0.5),
+                    spreadRadius: 2,
+                    blurRadius: 8,
+                    offset: Offset(0, 1), // changes position of shadow
+                  ),
+                ],
               ),
               child: TextField(
                 controller: _searchController,
-                style: TextStyle(color: Colors.white),
+                style: TextStyle(color: Colors.black),
                 decoration: InputDecoration(
-                  prefixIcon: Icon(Icons.search, color: Colors.white),
+                  prefixIcon: Icon(Icons.search, color: _gradientStartColor),
                   hintText: "Enter Unique ID / Email / Phone...",
-                  hintStyle: TextStyle(color: Colors.white70),
+                  hintStyle: TextStyle(color: isDark ? Colors.white : Colors.black87,),
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(vertical: 15),
                   suffixIcon: IconButton(
                     icon: Icon(Icons.arrow_forward_ios,
                         color: isDark
-                            ? Colors.white
-                            : Colors.white),
+                            ? _gradientStartColor
+                            : _gradientStartColor),
                     onPressed: _searchUser,
                   ),
                 ),
